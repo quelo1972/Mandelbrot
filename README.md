@@ -17,6 +17,19 @@ python3 mandelbrot.py
 
 ## Funzionalita'
 - Rendering degli insiemi di **Mandelbrot** e **Julia**.
+
+## Descrizione Matematica
+
+Entrambi gli insiemi sono basati sulla ripetizione (iterazione) di una funzione quadratica nel piano complesso:
+
+$$z_{n+1} = z_n^2 + c$$
+
+### Insieme di Mandelbrot
+Si ottiene partendo da $z_0 = 0$ e variando il valore di $c$ per ogni punto del piano. Se la successione dei valori di $z$ rimane limitata (non tende all'infinito), il punto $c$ appartiene all'insieme.
+
+### Insieme di Julia
+Si ottiene fissando una costante complessa $c$ per tutta l'immagine e variando il punto di partenza $z_0$ per ogni pixel del piano. La forma dell'insieme cambia drasticamente al variare della costante $c$ scelta.
+
 - Selettore rapido tra i due tipi di frattale.
 - Controllo dinamico di:
   - risoluzione (`Larghezza`, `Altezza`)
