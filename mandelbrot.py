@@ -12,7 +12,7 @@ import time
 import tkinter as tk
 from concurrent.futures import ProcessPoolExecutor
 from itertools import repeat
-from tkinter import ttk
+from tkinter import ttk, filedialog, messagebox
 
 
 DEFAULTS = {
@@ -23,6 +23,7 @@ DEFAULTS = {
     "re_max": 1.0,
     "im_min": -1.2,
     "im_max": 1.2,
+    "palette": "Classic",
 }
 
 
@@ -48,11 +49,27 @@ def mandelbrot(c_re: float, c_im: float, max_iter: int) -> int:
     return max_iter
 
 
-def color_from_iter(it: int, max_iter: int) -> str:
-    """Mappa il numero di iterazioni in un colore RGB esadecimale."""
+def color_from_iter(it: int, max_iter: int, palette: str = "Classic") -> str:
+    """Mappa il numero di iterazioni in un colore RGB esadecimale basato sulla palette."""
     if it == max_iter:
         return "#000000"
     t = it / max_iter
+
+    if palette == "Grayscale":
+        v = int(255 * t)
+        return f"#{v:02x}{v:02x}{v:02x}"
+    if palette == "Fire":
+        r = int(min(255, t * 255 * 3))
+        g = int(min(255, max(0, t * 255 * 3 - 255)))
+        b = int(min(255, max(0, t * 255 * 3 - 510)))
+        return f"#{r:02x}{g:02x}{b:02x}"
+    if palette == "Emerald":
+        r = int(min(255, max(0, t * 255 * 3 - 255)))
+        g = int(min(255, t * 255 * 3))
+        b = int(max(0, t * 255 * 3 - 510))
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    # Classic (default)
     r = int(9 * (1 - t) * t * t * t * 255)
     g = int(15 * (1 - t) * (1 - t) * t * t * 255)
     b = int(8.5 * (1 - t) * (1 - t) * (1 - t) * t * 255)
@@ -68,6 +85,7 @@ def compute_row_data(
     re_max: float,
     im_min: float,
     im_max: float,
+    palette: str,
 ) -> tuple[int, str]:
     """Calcola una singola riga (y) dell'immagine e la restituisce pronta per PhotoImage.put."""
     x_div = max(width - 1, 1)
@@ -78,7 +96,7 @@ def compute_row_data(
     for x in range(width):
         c_re = re_min + (x / x_div) * (re_max - re_min)
         it = mandelbrot(c_re, c_im, max_iter)
-        row.append(color_from_iter(it, max_iter))
+        row.append(color_from_iter(it, max_iter, palette))
 
     return y, "{" + " ".join(row) + "}"
 
@@ -104,6 +122,7 @@ class MandelbrotApp:
         self.preview_scale_var = tk.IntVar(value=2)
         self.use_mp_var = tk.BooleanVar(value=True)
         self.workers_var = tk.StringVar(value=str(max(1, cpu - 1)))
+        self.palette_var = tk.StringVar(value=DEFAULTS["palette"])
 
         container = ttk.Frame(root, padding=8)
         container.pack(fill=tk.BOTH, expand=True)
@@ -134,6 +153,16 @@ class MandelbrotApp:
         iter_scale.pack(fill=tk.X, padx=8)
         ttk.Label(controls, textvariable=self.max_iter_var).pack(anchor="e", padx=8)
 
+        ttk.Label(controls, text="Palette colori").pack(anchor="w", padx=8, pady=(4, 0))
+        palette_combo = ttk.Combobox(
+            controls,
+            textvariable=self.palette_var,
+            values=["Classic", "Grayscale", "Fire", "Emerald"],
+            state="readonly",
+        )
+        palette_combo.pack(fill=tk.X, padx=8)
+        palette_combo.bind("<<ComboboxSelected>>", lambda _: self.on_palette_change())
+
         self._add_entry(controls, "Larghezza", self.width_var)
         self._add_entry(controls, "Altezza", self.height_var)
         self._add_entry(controls, "Re minimo", self.re_min_var)
@@ -158,6 +187,7 @@ class MandelbrotApp:
         buttons.pack(fill=tk.X, pady=8, padx=8)
         ttk.Button(buttons, text="Anteprima", command=lambda: self.render(preview=True)).pack(fill=tk.X, pady=2)
         ttk.Button(buttons, text="Genera HQ", command=lambda: self.render(preview=False)).pack(fill=tk.X, pady=2)
+        ttk.Button(buttons, text="Salva PNG", command=self.save_image).pack(fill=tk.X, pady=2)
         ttk.Button(buttons, text="Reset", command=self.reset_defaults).pack(fill=tk.X, pady=2)
 
         ttk.Label(
@@ -168,7 +198,7 @@ class MandelbrotApp:
                 "2) Genera HQ per il dettaglio finale\n\n"
                 "Mouse:\n"
                 "- Click sx: ricentra\n"
-                "- Click sx + trascina: sposta vista\n"
+                "- Click sx + trascina: area zoom\n"
                 "- Rotella: zoom sul centro"
             ),
             justify=tk.LEFT,
@@ -184,6 +214,7 @@ class MandelbrotApp:
         self.drag_start_view: tuple[float, float, float, float] | None = None
         self.drag_moved = False
         self.last_drag_preview_ts = 0.0
+        self.zoom_rect_id: int | None = None
 
         self.canvas.bind("<ButtonPress-1>", self.on_left_press)
         self.canvas.bind("<B1-Motion>", self.on_left_drag)
@@ -201,7 +232,7 @@ class MandelbrotApp:
         ttk.Label(frame, text=label, width=13).pack(side=tk.LEFT)
         ttk.Entry(frame, textvariable=variable, width=12).pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-    def _read_params(self) -> tuple[int, int, int, float, float, float, float, int, int]:
+    def _read_params(self) -> tuple[int, int, int, float, float, float, float, int, int, str]:
         """Legge e valida i parametri UI per il rendering."""
         width = int(self.width_var.get())
         height = int(self.height_var.get())
@@ -212,6 +243,7 @@ class MandelbrotApp:
         im_max = float(self.im_max_var.get())
         preview_scale = int(self.preview_scale_var.get())
         workers = int(self.workers_var.get())
+        palette = self.palette_var.get()
 
         if width < 100 or height < 100:
             raise ValueError("Larghezza e altezza devono essere almeno 100.")
@@ -226,7 +258,7 @@ class MandelbrotApp:
         if workers < 1:
             raise ValueError("Il numero di worker deve essere >= 1.")
 
-        return width, height, max_iter, re_min, re_max, im_min, im_max, preview_scale, workers
+        return width, height, max_iter, re_min, re_max, im_min, im_max, preview_scale, workers, palette
 
     def _read_view_window(self) -> tuple[float, float, float, float]:
         """Legge e valida solo la finestra complessa corrente."""
@@ -249,8 +281,10 @@ class MandelbrotApp:
         self, px: int, py: int, re_min: float, re_max: float, im_min: float, im_max: float
     ) -> tuple[float, float]:
         """Converte coordinate canvas (pixel) in coordinate del piano complesso."""
-        width = max(self.canvas.winfo_width(), 2)
-        height = max(self.canvas.winfo_height(), 2)
+        # Usiamo le dimensioni dell'immagine effettiva, non del widget canvas
+        # per evitare errori di mapping se il widget è più grande dell'immagine.
+        width = self.image.width() if self.image else max(self.canvas.winfo_width(), 2)
+        height = self.image.height() if self.image else max(self.canvas.winfo_height(), 2)
         nx = min(max(px, 0), width - 1) / (width - 1)
         ny = min(max(py, 0), height - 1) / (height - 1)
         c_re = re_min + nx * (re_max - re_min)
@@ -284,58 +318,78 @@ class MandelbrotApp:
             self.hq_after_id = None
 
     def on_left_drag(self, event: tk.Event) -> None:
-        """Pan della finestra complessa durante il trascinamento."""
-        if self.drag_start_xy is None or self.drag_start_view is None:
+        """Disegna un rettangolo di selezione per lo zoom."""
+        if self.drag_start_xy is None:
             return
 
         start_x, start_y = self.drag_start_xy
-        dx = event.x - start_x
-        dy = event.y - start_y
-        if abs(dx) < 2 and abs(dy) < 2:
-            return
+        
+        # Soglia minima per attivare il drag
+        if not self.drag_moved:
+            if abs(event.x - start_x) > 3 or abs(event.y - start_y) > 3:
+                self.drag_moved = True
 
-        self.drag_moved = True
-        re_min0, re_max0, im_min0, im_max0 = self.drag_start_view
-        width = max(self.canvas.winfo_width(), 2)
-        height = max(self.canvas.winfo_height(), 2)
-        re_span = re_max0 - re_min0
-        im_span = im_max0 - im_min0
-
-        shift_re = -(dx / (width - 1)) * re_span
-        shift_im = (dy / (height - 1)) * im_span
-        self._set_view_window(
-            re_min0 + shift_re,
-            re_max0 + shift_re,
-            im_min0 + shift_im,
-            im_max0 + shift_im,
-        )
-
-        # Throttle sull'anteprima per mantenere il drag fluido.
-        now = time.perf_counter()
-        if now - self.last_drag_preview_ts >= 0.05:
-            self.render(preview=True)
-            self.last_drag_preview_ts = now
+        if self.drag_moved:
+            if self.zoom_rect_id:
+                self.canvas.coords(self.zoom_rect_id, start_x, start_y, event.x, event.y)
+            else:
+                # Crea il rettangolo tratteggiato
+                self.zoom_rect_id = self.canvas.create_rectangle(
+                    start_x, start_y, event.x, event.y,
+                    outline="white", dash=(4, 4), width=1
+                )
 
     def on_left_release(self, event: tk.Event) -> None:
-        """Fine click/drag: click ricentra, drag conferma pan e pianifica HQ."""
-        if self.drag_start_view is None:
+        """Fine selezione: esegue lo zoom nell'area del rettangolo o ricentra se click singolo."""
+        if self.drag_start_view is None or self.drag_start_xy is None:
             return
 
-        if not self.drag_moved:
-            re_min, re_max, im_min, im_max = self.drag_start_view
-            c_re, c_im = self._pixel_to_complex(event.x, event.y, re_min, re_max, im_min, im_max)
-            re_span = re_max - re_min
-            im_span = im_max - im_min
-            self._set_view_window(
-                c_re - re_span / 2.0,
-                c_re + re_span / 2.0,
-                c_im - im_span / 2.0,
-                c_im + im_span / 2.0,
-            )
-            self.render(preview=True)
-        else:
-            self.render(preview=True)
+        # Rimuove il rettangolo grafico
+        if self.zoom_rect_id:
+            self.canvas.delete(self.zoom_rect_id)
+            self.zoom_rect_id = None
 
+        re_min, re_max, im_min, im_max = self.drag_start_view
+
+        if self.drag_moved:
+            # Zoom nell'area selezionata
+            x0, y0 = self.drag_start_xy
+            x1, y1 = event.x, event.y
+
+            # Leggiamo l'aspect ratio dai parametri target per evitare incoerenze durante il preview
+            try:
+                target_w = int(self.width_var.get())
+                target_h = int(self.height_var.get())
+                ratio = target_w / target_h
+            except (ValueError, ZeroDivisionError):
+                ratio = (re_max - re_min) / (im_max - im_min)
+
+            # Convertiamo i pixel della selezione in coordinate complesse
+            c_re0, c_im0 = self._pixel_to_complex(x0, y0, re_min, re_max, im_min, im_max)
+            c_re1, c_im1 = self._pixel_to_complex(x1, y1, re_min, re_max, im_min, im_max)
+            
+            # Centro e dimensioni della selezione nel piano complesso
+            delta_re = abs(c_re1 - c_re0)
+            delta_im = abs(c_im0 - c_im1)
+            c_re_mid = (c_re0 + c_re1) / 2.0
+            c_im_mid = (c_im0 + c_im1) / 2.0
+
+            # Adattiamo lo span per mantenere l'aspect ratio corretto senza distorsioni
+            new_re_span = max(delta_re, delta_im * ratio)
+            new_im_span = new_re_span / ratio
+
+            self._set_view_window(
+                c_re_mid - new_re_span / 2, c_re_mid + new_re_span / 2,
+                c_im_mid - new_im_span / 2, c_im_mid + new_im_span / 2
+            )
+        else:
+            # Click singolo: ricentra senza cambiare livello di zoom
+            c_re, c_im = self._pixel_to_complex(event.x, event.y, re_min, re_max, im_min, im_max)
+            re_half = (re_max - re_min) / 2.0
+            im_half = (im_max - im_min) / 2.0
+            self._set_view_window(c_re - re_half, c_re + re_half, c_im - im_half, c_im + im_half)
+
+        self.render(preview=True)
         self.drag_start_xy = None
         self.drag_start_view = None
         self.drag_moved = False
@@ -367,6 +421,11 @@ class MandelbrotApp:
         self.render(preview=True)
         self._schedule_hq_render()
 
+    def on_palette_change(self) -> None:
+        """Aggiorna la vista quando la palette viene cambiata."""
+        self.render(preview=True)
+        self._schedule_hq_render()
+
     def reset_defaults(self) -> None:
         """Ripristina tutti i parametri di default e rigenera anteprima."""
         cpu = os.cpu_count() or 2
@@ -380,7 +439,30 @@ class MandelbrotApp:
         self.preview_scale_var.set(2)
         self.use_mp_var.set(True)
         self.workers_var.set(str(max(1, cpu - 1)))
+        self.palette_var.set(DEFAULTS["palette"])
         self.render(preview=True)
+
+    def save_image(self) -> None:
+        """Salva l'immagine attualmente visualizzata in formato PNG."""
+        if self.image is None:
+            messagebox.showwarning("Salvataggio", "Nessuna immagine da salvare. Genera prima un'immagine.")
+            return
+
+        filename = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[("Immagini PNG", "*.png"), ("Tutti i file", "*.*")],
+            initialfile="mandelbrot.png",
+            title="Salva immagine Mandelbrot"
+        )
+
+        if not filename:
+            return
+
+        try:
+            self.image.write(filename, format="png")
+            self.status_var.set(f"Immagine salvata correttamente: {filename}")
+        except Exception as e:
+            messagebox.showerror("Errore", f"Impossibile salvare l'immagine: {e}")
 
     def _render_rows(
         self,
@@ -396,6 +478,7 @@ class MandelbrotApp:
         use_symmetry: bool,
         use_mp: bool,
         workers: int,
+        palette: str,
     ) -> None:
         """Renderizza righe su PhotoImage in single-process o multiprocesso."""
         total = len(y_values)
@@ -412,6 +495,7 @@ class MandelbrotApp:
                     repeat(re_max),
                     repeat(im_min),
                     repeat(im_max),
+                    repeat(palette),
                     chunksize=8,
                 )
                 for idx, (y, row_data) in enumerate(rows_iter, 1):
@@ -435,6 +519,7 @@ class MandelbrotApp:
                     re_max,
                     im_min,
                     im_max,
+                    palette,
                 )
                 image.put(row_data, to=(0, y))
                 if use_symmetry:
@@ -449,7 +534,7 @@ class MandelbrotApp:
     def render(self, preview: bool) -> None:
         """Pipeline completa di rendering (anteprima o HQ)."""
         try:
-            width, height, max_iter, re_min, re_max, im_min, im_max, preview_scale, workers = self._read_params()
+            width, height, max_iter, re_min, re_max, im_min, im_max, preview_scale, workers, palette = self._read_params()
         except ValueError as exc:
             self.status_var.set(f"Errore: {exc}")
             return
@@ -492,6 +577,7 @@ class MandelbrotApp:
             use_symmetry,
             use_mp,
             workers,
+            palette,
         )
 
         elapsed = (time.perf_counter() - start) * 1000.0

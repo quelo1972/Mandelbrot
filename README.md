@@ -22,18 +22,19 @@ python3 mandelbrot.py
   - risoluzione (`Larghezza`, `Altezza`)
   - iterazioni massime
   - finestra del piano complesso (`Re`/`Im` min e max)
+- Esportazione dell'immagine in formato **PNG**.
+- Scelta tra diverse palette di colori: **Classic**, **Grayscale**, **Fire**, **Emerald**.
 - Due modalita' di rendering:
   - `Anteprima`: piu' veloce (riduce risoluzione e iterazioni)
   - `Genera HQ`: rendering finale ad alta qualita'
 - Ottimizzazioni:
   - test rapido cardioide/bulbo
   - simmetria sull'asse reale (quando applicabile)
-  - multiprocesso opzionale in HQ
+  - multiprocesso parallelizzato per il calcolo delle righe in HQ
 
 ## Controlli mouse
 
-- `Click sinistro`: porta il punto cliccato al centro.
-- `Click sinistro + trascina`: sposta la vista (pan).
+- `Click sinistro + trascina`: disegna un rettangolo per selezionare l'area di zoom.
 - `Rotella`: zoom in/out centrato sul centro della vista.
 
 Dopo interazioni mouse, l'app mostra prima un'anteprima veloce e poi programma automaticamente un render HQ.
