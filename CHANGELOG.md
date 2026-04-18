@@ -2,8 +2,14 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file.
 
-## [1.1.0] - 2024-05-21
+## [1.2.0] - 2024-05-22
+### Aggiunto
+- Supporto per l'**Insieme di Julia**.
+- Selettore dinamico nel pannello parametri per passare tra Mandelbrot e Julia.
+- Gestione automatica della centratura e dei limiti della vista al cambio di frattale.
+- Ottimizzazione del loop di calcolo (riduzione moltiplicazioni ridondanti).
 
+## [1.1.0] - 2024-05-21
 ### Aggiunto
 - Funzionalità di salvataggio dell'immagine in formato **PNG**.
 - Sistema di navigazione tramite **rettangolo di selezione** (click e trascina) per uno zoom preciso.

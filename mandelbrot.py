@@ -24,28 +24,39 @@ DEFAULTS = {
     "im_min": -1.2,
     "im_max": 1.2,
     "palette": "Classic",
+    "type": "Mandelbrot",
+    "julia_re": -0.7,
+    "julia_im": 0.27015,
 }
 
 
-def mandelbrot(c_re: float, c_im: float, max_iter: int) -> int:
-    """Restituisce il numero di iterazioni prima della divergenza."""
-    # Test rapido: cardioide principale e bulbo di periodo 2.
-    # Questi punti sono sicuramente interni all'insieme.
-    c_im2 = c_im * c_im
-    x = c_re - 0.25
-    q = x * x + c_im2
-    if q * (q + x) <= 0.25 * c_im2:
-        return max_iter
-    if (c_re + 1.0) * (c_re + 1.0) + c_im2 <= 0.0625:
-        return max_iter
+def calculate_fractal_point(p_re: float, p_im: float, max_iter: int, 
+                           fractal_type: str, j_re: float, j_im: float) -> int:
+    """Calcola le iterazioni per un punto dato il tipo di frattale."""
+    if fractal_type == "Mandelbrot":
+        # Test rapido cardioide/bulbo (solo per Mandelbrot)
+        c_re, c_im = p_re, p_im
+        c_im2 = c_im * c_im
+        x = c_re - 0.25
+        q = x * x + c_im2
+        if q * (q + x) <= 0.25 * c_im2:
+            return max_iter
+        if (c_re + 1.0) * (c_re + 1.0) + c_im2 <= 0.0625:
+            return max_iter
+        z_re, z_im = 0.0, 0.0
+    else:
+        # Julia: il punto è z0, c è la costante scelta
+        z_re, z_im = p_re, p_im
+        c_re, c_im = j_re, j_im
 
-    z_re, z_im = 0.0, 0.0
     for i in range(max_iter):
-        z_re2 = z_re * z_re - z_im * z_im + c_re
-        z_im2 = 2.0 * z_re * z_im + c_im
-        z_re, z_im = z_re2, z_im2
-        if z_re * z_re + z_im * z_im > 4.0:
+        r2 = z_re * z_re
+        i2 = z_im * z_im
+        if r2 + i2 > 4.0:
             return i
+        z_im = 2.0 * z_re * z_im + c_im
+        z_re = r2 - i2 + c_re
+
     return max_iter
 
 
@@ -86,6 +97,9 @@ def compute_row_data(
     im_min: float,
     im_max: float,
     palette: str,
+    fractal_type: str,
+    j_re: float,
+    j_im: float,
 ) -> tuple[int, str]:
     """Calcola una singola riga (y) dell'immagine e la restituisce pronta per PhotoImage.put."""
     x_div = max(width - 1, 1)
@@ -95,7 +109,7 @@ def compute_row_data(
     row = []
     for x in range(width):
         c_re = re_min + (x / x_div) * (re_max - re_min)
-        it = mandelbrot(c_re, c_im, max_iter)
+        it = calculate_fractal_point(c_re, c_im, max_iter, fractal_type, j_re, j_im)
         row.append(color_from_iter(it, max_iter, palette))
 
     return y, "{" + " ".join(row) + "}"
@@ -123,6 +137,9 @@ class MandelbrotApp:
         self.use_mp_var = tk.BooleanVar(value=True)
         self.workers_var = tk.StringVar(value=str(max(1, cpu - 1)))
         self.palette_var = tk.StringVar(value=DEFAULTS["palette"])
+        self.fractal_type_var = tk.StringVar(value=DEFAULTS["type"])
+        self.julia_re_var = tk.StringVar(value=str(DEFAULTS["julia_re"]))
+        self.julia_im_var = tk.StringVar(value=str(DEFAULTS["julia_im"]))
 
         container = ttk.Frame(root, padding=8)
         container.pack(fill=tk.BOTH, expand=True)
@@ -153,6 +170,16 @@ class MandelbrotApp:
         iter_scale.pack(fill=tk.X, padx=8)
         ttk.Label(controls, textvariable=self.max_iter_var).pack(anchor="e", padx=8)
 
+        ttk.Label(controls, text="Tipo Frattale").pack(anchor="w", padx=8, pady=(4, 0))
+        type_combo = ttk.Combobox(
+            controls,
+            textvariable=self.fractal_type_var,
+            values=["Mandelbrot", "Julia"],
+            state="readonly",
+        )
+        type_combo.pack(fill=tk.X, padx=8)
+        type_combo.bind("<<ComboboxSelected>>", self.on_fractal_type_change)
+
         ttk.Label(controls, text="Palette colori").pack(anchor="w", padx=8, pady=(4, 0))
         palette_combo = ttk.Combobox(
             controls,
@@ -163,8 +190,19 @@ class MandelbrotApp:
         palette_combo.pack(fill=tk.X, padx=8)
         palette_combo.bind("<<ComboboxSelected>>", lambda _: self.on_palette_change())
 
+        buttons = ttk.Frame(controls)
+        buttons.pack(fill=tk.X, pady=8, padx=8)
+        ttk.Button(buttons, text="Anteprima", command=lambda: self.render(preview=True)).pack(fill=tk.X, pady=2)
+        ttk.Button(buttons, text="Genera HQ", command=lambda: self.render(preview=False)).pack(fill=tk.X, pady=2)
+        ttk.Button(buttons, text="Salva PNG", command=self.save_image).pack(fill=tk.X, pady=2)
+        ttk.Button(buttons, text="Reset Globale", command=self.reset_defaults).pack(fill=tk.X, pady=2)
+
         self._add_entry(controls, "Larghezza", self.width_var)
         self._add_entry(controls, "Altezza", self.height_var)
+
+        self._add_entry(controls, "Julia Re (c)", self.julia_re_var)
+        self._add_entry(controls, "Julia Im (c)", self.julia_im_var)
+
         self._add_entry(controls, "Re minimo", self.re_min_var)
         self._add_entry(controls, "Re massimo", self.re_max_var)
         self._add_entry(controls, "Im minimo", self.im_min_var)
@@ -182,13 +220,6 @@ class MandelbrotApp:
             anchor="w", padx=8, pady=(8, 2)
         )
         self._add_entry(controls, "Worker", self.workers_var)
-
-        buttons = ttk.Frame(controls)
-        buttons.pack(fill=tk.X, pady=8, padx=8)
-        ttk.Button(buttons, text="Anteprima", command=lambda: self.render(preview=True)).pack(fill=tk.X, pady=2)
-        ttk.Button(buttons, text="Genera HQ", command=lambda: self.render(preview=False)).pack(fill=tk.X, pady=2)
-        ttk.Button(buttons, text="Salva PNG", command=self.save_image).pack(fill=tk.X, pady=2)
-        ttk.Button(buttons, text="Reset", command=self.reset_defaults).pack(fill=tk.X, pady=2)
 
         ttk.Label(
             controls,
@@ -232,7 +263,7 @@ class MandelbrotApp:
         ttk.Label(frame, text=label, width=13).pack(side=tk.LEFT)
         ttk.Entry(frame, textvariable=variable, width=12).pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-    def _read_params(self) -> tuple[int, int, int, float, float, float, float, int, int, str]:
+    def _read_params(self) -> tuple:
         """Legge e valida i parametri UI per il rendering."""
         width = int(self.width_var.get())
         height = int(self.height_var.get())
@@ -244,6 +275,9 @@ class MandelbrotApp:
         preview_scale = int(self.preview_scale_var.get())
         workers = int(self.workers_var.get())
         palette = self.palette_var.get()
+        fractal_type = self.fractal_type_var.get()
+        j_re = float(self.julia_re_var.get())
+        j_im = float(self.julia_im_var.get())
 
         if width < 100 or height < 100:
             raise ValueError("Larghezza e altezza devono essere almeno 100.")
@@ -258,7 +292,10 @@ class MandelbrotApp:
         if workers < 1:
             raise ValueError("Il numero di worker deve essere >= 1.")
 
-        return width, height, max_iter, re_min, re_max, im_min, im_max, preview_scale, workers, palette
+        return (
+            width, height, max_iter, re_min, re_max, im_min, im_max, 
+            preview_scale, workers, palette, fractal_type, j_re, j_im
+        )
 
     def _read_view_window(self) -> tuple[float, float, float, float]:
         """Legge e valida solo la finestra complessa corrente."""
@@ -426,20 +463,45 @@ class MandelbrotApp:
         self.render(preview=True)
         self._schedule_hq_render()
 
+    def on_fractal_type_change(self, event: tk.Event = None) -> None:
+        """Aggiorna le coordinate e renderizza quando si cambia il tipo di frattale."""
+        if self.fractal_type_var.get() == "Mandelbrot":
+            self._set_view_window(DEFAULTS["re_min"], DEFAULTS["re_max"],
+                                 DEFAULTS["im_min"], DEFAULTS["im_max"])
+        else:
+            # Centra per Julia (0,0) con aspect ratio 1.5 (range -1.8 a 1.8)
+            self._set_view_window(-1.8, 1.8, -1.2, 1.2)
+        
+        self.render(preview=True)
+        self._schedule_hq_render()
+
     def reset_defaults(self) -> None:
         """Ripristina tutti i parametri di default e rigenera anteprima."""
         cpu = os.cpu_count() or 2
         self.width_var.set(str(DEFAULTS["width"]))
         self.height_var.set(str(DEFAULTS["height"]))
         self.max_iter_var.set(DEFAULTS["max_iter"])
-        self.re_min_var.set(str(DEFAULTS["re_min"]))
-        self.re_max_var.set(str(DEFAULTS["re_max"]))
-        self.im_min_var.set(str(DEFAULTS["im_min"]))
-        self.im_max_var.set(str(DEFAULTS["im_max"]))
+        # Seleziona i limiti del piano in base al tipo di frattale corrente
+        if self.fractal_type_var.get() == "Mandelbrot":
+            self.re_min_var.set(str(DEFAULTS["re_min"]))
+            self.re_max_var.set(str(DEFAULTS["re_max"]))
+            self.im_min_var.set(str(DEFAULTS["im_min"]))
+            self.im_max_var.set(str(DEFAULTS["im_max"]))
+        else:
+            # L'insieme di Julia è centrato sull'origine (0,0).
+            # Usiamo un range simmetrico che rispetti l'aspect ratio 1.5 (900/600).
+            self.re_min_var.set("-1.8")
+            self.re_max_var.set("1.8")
+            self.im_min_var.set("-1.2")
+            self.im_max_var.set("1.2")
+
         self.preview_scale_var.set(2)
         self.use_mp_var.set(True)
         self.workers_var.set(str(max(1, cpu - 1)))
         self.palette_var.set(DEFAULTS["palette"])
+        # Non forziamo il ritorno a Mandelbrot per consentire il reset della vista Julia
+        self.julia_re_var.set(str(DEFAULTS["julia_re"]))
+        self.julia_im_var.set(str(DEFAULTS["julia_im"]))
         self.render(preview=True)
 
     def save_image(self) -> None:
@@ -479,6 +541,9 @@ class MandelbrotApp:
         use_mp: bool,
         workers: int,
         palette: str,
+        fractal_type: str,
+        j_re: float,
+        j_im: float,
     ) -> None:
         """Renderizza righe su PhotoImage in single-process o multiprocesso."""
         total = len(y_values)
@@ -496,6 +561,9 @@ class MandelbrotApp:
                     repeat(im_min),
                     repeat(im_max),
                     repeat(palette),
+                    repeat(fractal_type),
+                    repeat(j_re),
+                    repeat(j_im),
                     chunksize=8,
                 )
                 for idx, (y, row_data) in enumerate(rows_iter, 1):
@@ -520,6 +588,9 @@ class MandelbrotApp:
                     im_min,
                     im_max,
                     palette,
+                    fractal_type,
+                    j_re,
+                    j_im,
                 )
                 image.put(row_data, to=(0, y))
                 if use_symmetry:
@@ -534,7 +605,10 @@ class MandelbrotApp:
     def render(self, preview: bool) -> None:
         """Pipeline completa di rendering (anteprima o HQ)."""
         try:
-            width, height, max_iter, re_min, re_max, im_min, im_max, preview_scale, workers, palette = self._read_params()
+            (
+                width, height, max_iter, re_min, re_max, im_min, im_max, 
+                preview_scale, workers, palette, fractal_type, j_re, j_im
+            ) = self._read_params()
         except ValueError as exc:
             self.status_var.set(f"Errore: {exc}")
             return
@@ -561,7 +635,7 @@ class MandelbrotApp:
 
         # Se la finestra è simmetrica sull'asse reale calcoliamo solo metà righe.
         symmetry_eps = (im_max - im_min) * 1e-12 + 1e-15
-        use_symmetry = abs(im_max + im_min) <= symmetry_eps
+        use_symmetry = (fractal_type == "Mandelbrot") and (abs(im_max + im_min) <= symmetry_eps)
         y_values = list(range((height + 1) // 2)) if use_symmetry else list(range(height))
 
         self._render_rows(
@@ -578,20 +652,25 @@ class MandelbrotApp:
             use_mp,
             workers,
             palette,
+            fractal_type,
+            j_re,
+            j_im,
         )
 
         elapsed = (time.perf_counter() - start) * 1000.0
         self.image = image
         self.canvas.image = image
 
-        opt = "cardioide/bulbo"
+        opt = ""
+        if fractal_type == "Mandelbrot":
+            opt += "cardioide/bulbo"
         if use_symmetry:
-            opt += ", simmetria"
+            opt += (", " if opt else "") + "simmetria"
         if use_mp and workers > 1:
-            opt += f", multiprocesso={workers}"
+            opt += (", " if opt else "") + f"multiprocesso={workers}"
 
         self.status_var.set(
-            f"Pronto ({mode}) - {width}x{height}, iter={max_iter}, "
+            f"Pronto ({mode}) - {fractal_type}, {width}x{height}, iter={max_iter}, "
             f"tempo={elapsed:.0f} ms, ottimizzazioni: {opt}"
         )
 

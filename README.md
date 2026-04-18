@@ -1,6 +1,6 @@
-# Mandelbrot Viewer (Python + Tkinter)
+# Fractal Viewer (Mandelbrot & Julia - Python + Tkinter)
 
-Visualizzatore interattivo dell'insieme di Mandelbrot scritto in Python, senza dipendenze esterne.
+Visualizzatore interattivo degli insiemi di Mandelbrot e Julia scritto in Python, senza dipendenze esterne.
 
 ## Requisiti
 
@@ -16,8 +16,8 @@ python3 mandelbrot.py
 ```
 
 ## Funzionalita'
-
-- Rendering dell'insieme di Mandelbrot in finestra grafica.
+- Rendering degli insiemi di **Mandelbrot** e **Julia**.
+- Selettore rapido tra i due tipi di frattale.
 - Controllo dinamico di:
   - risoluzione (`Larghezza`, `Altezza`)
   - iterazioni massime
