@@ -279,9 +279,11 @@ class MandelbrotApp:
         # Stato del drag: punto iniziale in pixel e finestra complessa iniziale.
         self.drag_start_xy: tuple[int, int] | None = None
         self.drag_start_view: tuple[float, float, float, float] | None = None
+        self.drag_start_preview_mode = True
         self.drag_moved = False
         self.last_drag_preview_ts = 0.0
         self.zoom_rect_id: int | None = None
+        self.last_render_preview = True
 
         self.canvas.bind("<ButtonPress-1>", self.on_left_press)
         self.canvas.bind("<B1-Motion>", self.on_left_drag)
@@ -388,6 +390,7 @@ class MandelbrotApp:
             return
 
         self.drag_start_xy = (event.x, event.y)
+        self.drag_start_preview_mode = self.last_render_preview
         self.drag_moved = False
         self.last_drag_preview_ts = 0.0
         if self.hq_after_id is not None:
@@ -466,11 +469,17 @@ class MandelbrotApp:
             im_half = (im_max - im_min) / 2.0
             self._set_view_window(c_re - re_half, c_re + re_half, c_im - im_half, c_im + im_half)
 
-        self.render(preview=True)
+        was_drag_zoom = self.drag_moved
+
+        if was_drag_zoom:
+            self.render(preview=self.drag_start_preview_mode)
+        else:
+            self.render(preview=True)
         self.drag_start_xy = None
         self.drag_start_view = None
         self.drag_moved = False
-        self._schedule_hq_render()
+        if not was_drag_zoom:
+            self._schedule_hq_render()
 
     def on_mouse_wheel(self, event: tk.Event) -> None:
         """Zoom in/out centrato sul centro della vista corrente."""
@@ -694,6 +703,7 @@ class MandelbrotApp:
         )
 
         elapsed = (time.perf_counter() - start) * 1000.0
+        self.last_render_preview = preview
         self.image = image
         self.canvas.image = image
 
