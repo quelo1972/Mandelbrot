@@ -270,15 +270,19 @@ class MandelbrotApp:
 
     def _read_params(self) -> tuple:
         """Legge e valida i parametri UI per il rendering."""
-        width = int(self.width_var.get())
-        height = int(self.height_var.get())
-        max_iter = int(self.max_iter_var.get())
-        re_min = float(self.re_min_var.get())
-        re_max = float(self.re_max_var.get())
-        im_min = float(self.im_min_var.get())
-        im_max = float(self.im_max_var.get())
-        preview_scale = int(self.preview_scale_var.get())
-        workers = int(self.workers_var.get())
+        try:
+            width = int(self.width_var.get() or DEFAULTS["width"])
+            height = int(self.height_var.get() or DEFAULTS["height"])
+            max_iter = int(self.max_iter_var.get())
+            re_min = float(self.re_min_var.get())
+            re_max = float(self.re_max_var.get())
+            im_min = float(self.im_min_var.get())
+            im_max = float(self.im_max_var.get())
+            preview_scale = self.preview_scale_var.get()
+            workers = int(self.workers_var.get() or "1")
+        except ValueError:
+            raise ValueError("Controlla che tutti i campi numerici siano validi.")
+
         palette = self.palette_var.get()
         fractal_type = self.fractal_type_var.get()
         j_re = float(self.julia_re_var.get())
@@ -570,7 +574,7 @@ class MandelbrotApp:
                         mirror_y = height - 1 - y
                         if mirror_y != y:
                             image.put(row_data, to=(0, mirror_y))
-                    if idx % 10 == 0:
+                    if idx % 25 == 0: # Aggiornamento UI meno frequente per massimizzare throughput
                         pct = int((idx / total) * 100)
                         self.status_var.set(f"Generazione in corso... {pct}%")
                         self.root.update_idletasks()
@@ -595,7 +599,7 @@ class MandelbrotApp:
                     mirror_y = height - 1 - y
                     if mirror_y != y:
                         image.put(row_data, to=(0, mirror_y))
-                if idx % 20 == 0:
+                if idx % 25 == 0:
                     pct = int((idx / total) * 100)
                     self.status_var.set(f"Generazione in corso... {pct}%")
                     self.root.update_idletasks()
