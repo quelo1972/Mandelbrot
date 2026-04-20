@@ -469,17 +469,12 @@ class MandelbrotApp:
             im_half = (im_max - im_min) / 2.0
             self._set_view_window(c_re - re_half, c_re + re_half, c_im - im_half, c_im + im_half)
 
-        was_drag_zoom = self.drag_moved
-
-        if was_drag_zoom:
-            self.render(preview=self.drag_start_preview_mode)
-        else:
-            self.render(preview=True)
+        # Mantiene la stessa "superficie" d'interazione:
+        # click/drag in preview -> render preview, click/drag in HQ -> render HQ.
+        self.render(preview=self.drag_start_preview_mode)
         self.drag_start_xy = None
         self.drag_start_view = None
         self.drag_moved = False
-        if not was_drag_zoom:
-            self._schedule_hq_render()
 
     def on_mouse_wheel(self, event: tk.Event) -> None:
         """Zoom in/out centrato sul centro della vista corrente."""
