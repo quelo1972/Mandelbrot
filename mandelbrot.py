@@ -121,7 +121,6 @@ class MandelbrotApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("Insieme di Mandelbrot")
-        self.root.geometry("1240x780")
 
         cpu = os.cpu_count() or 2
 
@@ -238,8 +237,6 @@ class MandelbrotApp:
         ttk.Label(root, textvariable=self.status_var, anchor="w").pack(fill=tk.X, padx=10, pady=(0, 6))
 
         self.image: tk.PhotoImage | None = None
-        # ID del timer che scatena un render HQ ritardato dopo interazioni rapide.
-        self.hq_after_id: str | None = None
         # Stato del drag: punto iniziale in pixel e finestra complessa iniziale.
         self.drag_start_xy: tuple[int, int] | None = None
         self.drag_start_view: tuple[float, float, float, float] | None = None
@@ -350,9 +347,6 @@ class MandelbrotApp:
         self.drag_start_xy = (event.x, event.y)
         self.drag_moved = False
         self.last_drag_preview_ts = 0.0
-        if self.hq_after_id is not None:
-            self.root.after_cancel(self.hq_after_id)
-            self.hq_after_id = None
 
     def on_left_drag(self, event: tk.Event) -> None:
         """Disegna un rettangolo di selezione per lo zoom."""
@@ -430,7 +424,6 @@ class MandelbrotApp:
         self.drag_start_xy = None
         self.drag_start_view = None
         self.drag_moved = False
-        self._schedule_hq_render()
 
     def on_mouse_wheel(self, event: tk.Event) -> None:
         """Zoom in/out centrato sul centro della vista corrente."""
@@ -627,6 +620,9 @@ class MandelbrotApp:
         self.root.update_idletasks()
 
         self.canvas.config(width=width, height=height)
+        # Forza la finestra principale ad adattarsi alle nuove dimensioni del canvas
+        # mantenendo la possibilità di ridimensionarla manualmente.
+        self.root.geometry("")
         image = tk.PhotoImage(width=width, height=height)
         self.canvas.delete("all")
         self.canvas.create_image((0, 0), image=image, state="normal", anchor=tk.NW)
