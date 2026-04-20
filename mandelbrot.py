@@ -8,6 +8,7 @@ Caratteristiche principali:
 """
 
 import os
+import random
 import time
 import tkinter as tk
 from concurrent.futures import ProcessPoolExecutor
@@ -33,6 +34,19 @@ VIEW_PRESETS = {
     "Mandelbrot": (-2.5, 1.0, -1.2, 1.2),
     "Julia": (-1.8, 1.8, -1.2, 1.2)
 }
+
+PALETTE_NAMES = [
+    "Classic",
+    "Grayscale",
+    "Fire",
+    "Emerald",
+    "Ocean",
+    "Sunset",
+    "Ice",
+    "Aurora",
+    "Viridis",
+    "Neon",
+]
 
 
 def calculate_fractal_point(p_re: float, p_im: float, max_iter: int, 
@@ -67,6 +81,26 @@ def calculate_fractal_point(p_re: float, p_im: float, max_iter: int,
 
 def color_from_iter(it: int, max_iter: int, palette: str = "Classic") -> str:
     """Mappa il numero di iterazioni in un colore RGB esadecimale basato sulla palette."""
+    def _lerp_color(stops: list[tuple[float, int, int, int]], v: float) -> str:
+        """Interpolazione lineare tra stop colore (posizione, r, g, b)."""
+        if v <= stops[0][0]:
+            _, r, g, b = stops[0]
+            return f"#{r:02x}{g:02x}{b:02x}"
+        if v >= stops[-1][0]:
+            _, r, g, b = stops[-1]
+            return f"#{r:02x}{g:02x}{b:02x}"
+
+        for idx in range(1, len(stops)):
+            p1, r1, g1, b1 = stops[idx]
+            p0, r0, g0, b0 = stops[idx - 1]
+            if v <= p1:
+                local_t = (v - p0) / (p1 - p0)
+                r = int(r0 + (r1 - r0) * local_t)
+                g = int(g0 + (g1 - g0) * local_t)
+                b = int(b0 + (b1 - b0) * local_t)
+                return f"#{r:02x}{g:02x}{b:02x}"
+        return "#000000"
+
     if it == max_iter:
         return "#000000"
     t = it / max_iter
@@ -84,6 +118,72 @@ def color_from_iter(it: int, max_iter: int, palette: str = "Classic") -> str:
         g = int(min(255, t * 255 * 3))
         b = int(max(0, t * 255 * 3 - 510))
         return f"#{r:02x}{g:02x}{b:02x}"
+    if palette == "Ocean":
+        return _lerp_color(
+            [
+                (0.00, 1, 22, 39),
+                (0.28, 0, 88, 122),
+                (0.56, 0, 150, 199),
+                (0.78, 72, 202, 228),
+                (1.00, 202, 240, 248),
+            ],
+            t,
+        )
+    if palette == "Sunset":
+        return _lerp_color(
+            [
+                (0.00, 22, 11, 58),
+                (0.22, 88, 28, 135),
+                (0.48, 180, 52, 132),
+                (0.72, 255, 126, 95),
+                (1.00, 255, 226, 153),
+            ],
+            t,
+        )
+    if palette == "Ice":
+        return _lerp_color(
+            [
+                (0.00, 10, 20, 40),
+                (0.35, 22, 82, 122),
+                (0.62, 92, 170, 191),
+                (0.85, 166, 230, 235),
+                (1.00, 240, 252, 255),
+            ],
+            t,
+        )
+    if palette == "Aurora":
+        return _lerp_color(
+            [
+                (0.00, 6, 6, 24),
+                (0.25, 34, 139, 34),
+                (0.50, 0, 206, 209),
+                (0.72, 123, 104, 238),
+                (1.00, 255, 128, 191),
+            ],
+            t,
+        )
+    if palette == "Viridis":
+        return _lerp_color(
+            [
+                (0.00, 68, 1, 84),
+                (0.25, 59, 82, 139),
+                (0.50, 33, 145, 140),
+                (0.75, 94, 201, 98),
+                (1.00, 253, 231, 37),
+            ],
+            t,
+        )
+    if palette == "Neon":
+        return _lerp_color(
+            [
+                (0.00, 7, 0, 30),
+                (0.25, 76, 0, 255),
+                (0.50, 0, 224, 255),
+                (0.75, 57, 255, 20),
+                (1.00, 255, 255, 0),
+            ],
+            t,
+        )
 
     # Classic (default)
     r = int(9 * (1 - t) * t * t * t * 255)
@@ -220,11 +320,14 @@ class MandelbrotApp:
         palette_combo = ttk.Combobox(
             controls,
             textvariable=self.palette_var,
-            values=["Classic", "Grayscale", "Fire", "Emerald"],
+            values=PALETTE_NAMES,
             state="readonly",
         )
         palette_combo.pack(fill=tk.X, padx=8)
         palette_combo.bind("<<ComboboxSelected>>", lambda _: self.on_palette_change())
+        ttk.Button(controls, text="Palette casuale", command=self.randomize_palette).pack(
+            fill=tk.X, padx=8, pady=(4, 2)
+        )
 
         buttons = ttk.Frame(controls)
         buttons.pack(fill=tk.X, pady=8, padx=8)
@@ -513,8 +616,16 @@ class MandelbrotApp:
 
     def on_palette_change(self) -> None:
         """Aggiorna la vista quando la palette viene cambiata."""
-        self.render(preview=True)
-        self._schedule_hq_render()
+        self.render(preview=self.last_render_preview)
+
+    def randomize_palette(self) -> None:
+        """Sceglie una palette casuale (diversa dall'attuale) e la applica subito."""
+        current = self.palette_var.get()
+        choices = [name for name in PALETTE_NAMES if name != current]
+        if not choices:
+            return
+        self.palette_var.set(random.choice(choices))
+        self.on_palette_change()
 
     def on_fractal_type_change(self, event: tk.Event = None) -> None:
         """Aggiorna le coordinate e renderizza quando si cambia il tipo di frattale."""

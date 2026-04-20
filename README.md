@@ -36,7 +36,10 @@ Si ottiene fissando una costante complessa $c$ per tutta l'immagine e variando i
   - iterazioni massime
   - finestra del piano complesso (`Re`/`Im` min e max)
 - Esportazione dell'immagine in formato **PNG**.
-- Scelta tra diverse palette di colori: **Classic**, **Grayscale**, **Fire**, **Emerald**.
+- Scelta tra diverse palette di colori:
+  - **Classic**, **Grayscale**, **Fire**, **Emerald**
+  - **Ocean**, **Sunset**, **Ice**, **Aurora**, **Viridis**, **Neon**
+- Pulsante **Palette casuale** per provare rapidamente gradienti diversi.
 - Due modalita' di rendering:
   - `Anteprima`: piu' veloce (riduce risoluzione e iterazioni)
   - `Genera HQ`: rendering finale ad alta qualita'
@@ -47,10 +50,13 @@ Si ottiene fissando una costante complessa $c$ per tutta l'immagine e variando i
 
 ## Controlli mouse
 
+- `Click sinistro`: ricentra la vista mantenendo il livello di zoom.
 - `Click sinistro + trascina`: disegna un rettangolo per selezionare l'area di zoom.
 - `Rotella`: zoom in/out centrato sul centro della vista.
 
-Dopo le interazioni con il mouse, l'app rimane in modalità **Anteprima** per permettere una navigazione fluida. Usa il pulsante **Genera HQ** per il calcolo finale.
+La modalità viene mantenuta durante la navigazione:
+- se stai lavorando in **Anteprima**, click/drag/cambio palette restano in Anteprima
+- se stai lavorando in **HQ**, click/drag/cambio palette restano in HQ
 
 ## Parametri consigliati
 
