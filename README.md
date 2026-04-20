@@ -33,7 +33,7 @@ Si ottiene fissando una costante complessa $c$ per tutta l'immagine e variando i
 - Selettore rapido tra i due tipi di frattale.
 - Controllo dinamico di:
   - risoluzione (`Larghezza`, `Altezza`)
-  - iterazioni massime
+  - iterazioni massime (slider + inserimento manuale da casella testo)
   - finestra del piano complesso (`Re`/`Im` min e max)
 - Esportazione dell'immagine in formato **PNG**.
 - Scelta tra diverse palette di colori:
@@ -57,6 +57,8 @@ Si ottiene fissando una costante complessa $c$ per tutta l'immagine e variando i
 La modalità viene mantenuta durante la navigazione:
 - se stai lavorando in **Anteprima**, click/drag/cambio palette restano in Anteprima
 - se stai lavorando in **HQ**, click/drag/cambio palette restano in HQ
+
+Anche **Reset Globale** rispetta la modalità corrente (non forza più il passaggio ad Anteprima).
 
 ## Parametri consigliati
 

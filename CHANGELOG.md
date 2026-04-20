@@ -2,6 +2,15 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file.
 
+## [1.3.1] - 2026-04-20
+### Aggiunto
+- Campo di input manuale per `Iterazioni massime`, in aggiunta allo slider.
+
+### Cambiato
+- `Reset Globale` ora rispetta la modalità attiva:
+  - in **Anteprima** resta in Anteprima
+  - in **HQ** resta in HQ
+
 ## [1.3.0] - 2026-04-20
 ### Aggiunto
 - Nuove palette gradienti: **Ocean**, **Sunset**, **Ice**, **Aurora**, **Viridis**, **Neon**.

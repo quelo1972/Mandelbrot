@@ -304,7 +304,10 @@ class MandelbrotApp:
             variable=self.max_iter_var,
         )
         iter_scale.pack(fill=tk.X, padx=8)
-        ttk.Label(controls, textvariable=self.max_iter_var).pack(anchor="e", padx=8)
+        iter_entry_row = ttk.Frame(controls)
+        iter_entry_row.pack(fill=tk.X, padx=8, pady=(2, 0))
+        ttk.Label(iter_entry_row, text="Valore").pack(side=tk.LEFT)
+        ttk.Entry(iter_entry_row, textvariable=self.max_iter_var, width=10).pack(side=tk.RIGHT)
 
         ttk.Label(controls, text="Tipo Frattale").pack(anchor="w", padx=8, pady=(4, 0))
         type_combo = ttk.Combobox(
@@ -640,8 +643,11 @@ class MandelbrotApp:
         self.width_var.set(str(DEFAULTS["width"]))
         self.height_var.set(str(DEFAULTS["height"]))
         self.max_iter_var.set(DEFAULTS["max_iter"])
-        
-        self.on_fractal_type_change() # Applica i preset della vista
+
+        # Applica i preset della vista in base al tipo corrente senza forzare
+        # anteprima/HQ: il reset deve rispettare la modalità attiva.
+        preset = VIEW_PRESETS.get(self.fractal_type_var.get(), VIEW_PRESETS["Mandelbrot"])
+        self._set_view_window(*preset)
 
         self.preview_scale_var.set(2)
         self.use_mp_var.set(True)
@@ -650,7 +656,7 @@ class MandelbrotApp:
         # Non forziamo il ritorno a Mandelbrot per consentire il reset della vista Julia
         self.julia_re_var.set(str(DEFAULTS["julia_re"]))
         self.julia_im_var.set(str(DEFAULTS["julia_im"]))
-        self.render(preview=True)
+        self.render(preview=self.last_render_preview)
 
     def save_image(self) -> None:
         """Salva l'immagine attualmente visualizzata in formato PNG."""
