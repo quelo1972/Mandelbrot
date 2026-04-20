@@ -37,7 +37,7 @@ python3 mandelbrot.py
 - `Click sinistro + trascina`: disegna un rettangolo per selezionare l'area di zoom.
 - `Rotella`: zoom in/out centrato sul centro della vista.
 
-Dopo interazioni mouse, l'app mostra prima un'anteprima veloce e poi programma automaticamente un render HQ.
+Dopo le interazioni con il mouse, l'app rimane in modalità **Anteprima** per permettere una navigazione fluida. Usa il pulsante **Genera HQ** per il calcolo finale.
 
 ## Parametri consigliati
 

@@ -2,7 +2,14 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file.
 
-## [1.1.0] - 2024-05-21
+## [1.2.0] - 2024-05-22
+
+### Aggiunto
+- Finestra ora completamente ridimensionabile.
+- La finestra si adatta automaticamente alle dimensioni di Larghezza/Altezza impostate nei parametri.
+
+### Cambiato
+- Disabilitato il rendering HQ automatico dopo le interazioni mouse: l'app ora rimane in anteprima finché non viene richiesto manualmente il rendering HQ.
 
 ### Aggiunto
 - Funzionalità di salvataggio dell'immagine in formato **PNG**.
