@@ -77,3 +77,11 @@ Anche **Reset Globale** rispetta la modalità corrente (non forza più il passag
   - aumenta `Fattore preview` per la navigazione
   - riduci temporaneamente le iterazioni
   - abilita multiprocesso e imposta un numero adeguato di worker
+
+## Note repository
+
+Il progetto include un file `.gitignore` per evitare la sincronizzazione di file temporanei/locali, ad esempio:
+- cache Python (`__pycache__/`, `*.pyc`)
+- ambienti virtuali (`.venv/`, `venv/`)
+- cache di tool (`.pytest_cache/`, `.mypy_cache/`, `.ruff_cache/`)
+- impostazioni IDE locali (`.vscode/`, `.idea/`)

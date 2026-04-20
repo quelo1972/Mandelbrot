@@ -2,6 +2,14 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file.
 
+## [1.3.2] - 2026-04-20
+### Aggiunto
+- Sezione `Note repository` nel README con indicazioni sui file non sincronizzati.
+
+### Cambiato
+- Introdotto `.gitignore` per escludere artefatti locali/temporanei dal versionamento.
+- Rimosso il bytecode Python in `__pycache__/` dai file tracciati dal repository.
+
 ## [1.3.1] - 2026-04-20
 ### Aggiunto
 - Campo di input manuale per `Iterazioni massime`, in aggiunta allo slider.
