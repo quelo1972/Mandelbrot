@@ -149,8 +149,39 @@ class MandelbrotApp:
         container = ttk.Frame(root, padding=8)
         container.pack(fill=tk.BOTH, expand=True)
 
-        controls = ttk.LabelFrame(container, text="Parametri")
-        controls.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 8))
+        # Pannello laterale scrollabile
+        side_panel = ttk.LabelFrame(container, text="Parametri")
+        side_panel.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 8))
+
+        # Canvas che permette lo scrolling
+        side_canvas = tk.Canvas(side_panel, highlightthickness=0, width=260, bd=0) # Aggiunto bd=0 per coerenza
+        side_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        scrollbar = ttk.Scrollbar(side_panel, orient="vertical", command=side_canvas.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        side_canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Il frame che conterrà effettivamente i widget
+        controls = ttk.Frame(side_canvas)
+        side_window = side_canvas.create_window((0, 0), window=controls, anchor="nw")
+
+        # Aggiorna l'area di scrolling quando il contenuto cambia
+        controls.bind("<Configure>", lambda e: side_canvas.configure(scrollregion=side_canvas.bbox("all")))
+        # Forza la larghezza del frame interno a quella del canvas
+        side_canvas.bind("<Configure>", lambda e: side_canvas.itemconfig(side_window, width=e.width))
+
+        # Gestione rotella mouse per il pannello laterale
+        def _on_sidebar_scroll(event):
+            if event.num == 4 or event.delta > 0: side_canvas.yview_scroll(-1, "units")
+            elif event.num == 5 or event.delta < 0: side_canvas.yview_scroll(1, "units")
+
+        side_canvas.bind("<Enter>", lambda _: side_canvas.bind_all("<MouseWheel>", _on_sidebar_scroll))
+        side_canvas.bind("<Enter>", lambda _: side_canvas.bind_all("<Button-4>", _on_sidebar_scroll), add="+")
+        side_canvas.bind("<Enter>", lambda _: side_canvas.bind_all("<Button-5>", _on_sidebar_scroll), add="+")
+        side_canvas.bind("<Leave>", lambda _: side_canvas.unbind_all("<MouseWheel>"))
+        side_canvas.bind("<Leave>", lambda _: side_canvas.unbind_all("<Button-4>"), add="+")
+        side_canvas.bind("<Leave>", lambda _: side_canvas.unbind_all("<Button-5>"), add="+")
 
         canvas_frame = ttk.Frame(container)
         canvas_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
