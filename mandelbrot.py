@@ -29,6 +29,11 @@ DEFAULTS = {
     "julia_im": 0.27015,
 }
 
+VIEW_PRESETS = {
+    "Mandelbrot": (-2.5, 1.0, -1.2, 1.2),
+    "Julia": (-1.8, 1.8, -1.2, 1.2)
+}
+
 
 def calculate_fractal_point(p_re: float, p_im: float, max_iter: int, 
                            fractal_type: str, j_re: float, j_im: float) -> int:
@@ -54,7 +59,7 @@ def calculate_fractal_point(p_re: float, p_im: float, max_iter: int,
         i2 = z_im * z_im
         if r2 + i2 > 4.0:
             return i
-        z_im = 2.0 * z_re * z_im + c_im
+        z_im = (z_re + z_re) * z_im + c_im
         z_re = r2 - i2 + c_re
 
     return max_iter
@@ -96,7 +101,7 @@ def compute_row_data(
     re_max: float,
     im_min: float,
     im_max: float,
-    palette: str,
+    palette_colors: list[str],
     fractal_type: str,
     j_re: float,
     j_im: float,
@@ -110,7 +115,7 @@ def compute_row_data(
     for x in range(width):
         c_re = re_min + (x / x_div) * (re_max - re_min)
         it = calculate_fractal_point(c_re, c_im, max_iter, fractal_type, j_re, j_im)
-        row.append(color_from_iter(it, max_iter, palette))
+        row.append(palette_colors[it])
 
     return y, "{" + " ".join(row) + "}"
 
@@ -121,6 +126,7 @@ class MandelbrotApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("Insieme di Mandelbrot")
+        self.root.geometry("1240x780")
 
         cpu = os.cpu_count() or 2
 
@@ -237,6 +243,8 @@ class MandelbrotApp:
         ttk.Label(root, textvariable=self.status_var, anchor="w").pack(fill=tk.X, padx=10, pady=(0, 6))
 
         self.image: tk.PhotoImage | None = None
+        # ID del timer che scatena un render HQ ritardato dopo interazioni rapide.
+        self.hq_after_id: str | None = None
         # Stato del drag: punto iniziale in pixel e finestra complessa iniziale.
         self.drag_start_xy: tuple[int, int] | None = None
         self.drag_start_view: tuple[float, float, float, float] | None = None
@@ -347,6 +355,9 @@ class MandelbrotApp:
         self.drag_start_xy = (event.x, event.y)
         self.drag_moved = False
         self.last_drag_preview_ts = 0.0
+        if self.hq_after_id is not None:
+            self.root.after_cancel(self.hq_after_id)
+            self.hq_after_id = None
 
     def on_left_drag(self, event: tk.Event) -> None:
         """Disegna un rettangolo di selezione per lo zoom."""
@@ -424,6 +435,7 @@ class MandelbrotApp:
         self.drag_start_xy = None
         self.drag_start_view = None
         self.drag_moved = False
+        self._schedule_hq_render()
 
     def on_mouse_wheel(self, event: tk.Event) -> None:
         """Zoom in/out centrato sul centro della vista corrente."""
@@ -440,13 +452,22 @@ class MandelbrotApp:
             zoom_in = event.num == 4
 
         factor = 0.8 if zoom_in else 1.25
-        c_re = (re_min + re_max) / 2.0
-        c_im = (im_min + im_max) / 2.0
+
+        # Calcola le coordinate complesse sotto il mouse e la posizione relativa
+        mouse_re, mouse_im = self._pixel_to_complex(event.x, event.y, re_min, re_max, im_min, im_max)
+        width = self.image.width() if self.image else max(self.canvas.winfo_width(), 2)
+        height = self.image.height() if self.image else max(self.canvas.winfo_height(), 2)
+        nx = min(max(event.x, 0), width - 1) / (width - 1)
+        ny = min(max(event.y, 0), height - 1) / (height - 1)
+
+        new_re_span = (re_max - re_min) * factor
+        new_im_span = (im_max - im_min) * factor
+
         self._set_view_window(
-            c_re - (c_re - re_min) * factor,
-            c_re + (re_max - c_re) * factor,
-            c_im - (c_im - im_min) * factor,
-            c_im + (im_max - c_im) * factor,
+            mouse_re - nx * new_re_span,
+            mouse_re + (1 - nx) * new_re_span,
+            mouse_im - (1 - ny) * new_im_span,
+            mouse_im + ny * new_im_span
         )
         self.render(preview=True)
         self._schedule_hq_render()
@@ -458,13 +479,8 @@ class MandelbrotApp:
 
     def on_fractal_type_change(self, event: tk.Event = None) -> None:
         """Aggiorna le coordinate e renderizza quando si cambia il tipo di frattale."""
-        if self.fractal_type_var.get() == "Mandelbrot":
-            self._set_view_window(DEFAULTS["re_min"], DEFAULTS["re_max"],
-                                 DEFAULTS["im_min"], DEFAULTS["im_max"])
-        else:
-            # Centra per Julia (0,0) con aspect ratio 1.5 (range -1.8 a 1.8)
-            self._set_view_window(-1.8, 1.8, -1.2, 1.2)
-        
+        preset = VIEW_PRESETS.get(self.fractal_type_var.get(), VIEW_PRESETS["Mandelbrot"])
+        self._set_view_window(*preset)
         self.render(preview=True)
         self._schedule_hq_render()
 
@@ -474,19 +490,8 @@ class MandelbrotApp:
         self.width_var.set(str(DEFAULTS["width"]))
         self.height_var.set(str(DEFAULTS["height"]))
         self.max_iter_var.set(DEFAULTS["max_iter"])
-        # Seleziona i limiti del piano in base al tipo di frattale corrente
-        if self.fractal_type_var.get() == "Mandelbrot":
-            self.re_min_var.set(str(DEFAULTS["re_min"]))
-            self.re_max_var.set(str(DEFAULTS["re_max"]))
-            self.im_min_var.set(str(DEFAULTS["im_min"]))
-            self.im_max_var.set(str(DEFAULTS["im_max"]))
-        else:
-            # L'insieme di Julia è centrato sull'origine (0,0).
-            # Usiamo un range simmetrico che rispetti l'aspect ratio 1.5 (900/600).
-            self.re_min_var.set("-1.8")
-            self.re_max_var.set("1.8")
-            self.im_min_var.set("-1.2")
-            self.im_max_var.set("1.2")
+        
+        self.on_fractal_type_change() # Applica i preset della vista
 
         self.preview_scale_var.set(2)
         self.use_mp_var.set(True)
@@ -533,7 +538,7 @@ class MandelbrotApp:
         use_symmetry: bool,
         use_mp: bool,
         workers: int,
-        palette: str,
+        palette_colors: list[str],
         fractal_type: str,
         j_re: float,
         j_im: float,
@@ -553,7 +558,7 @@ class MandelbrotApp:
                     repeat(re_max),
                     repeat(im_min),
                     repeat(im_max),
-                    repeat(palette),
+                    repeat(palette_colors),
                     repeat(fractal_type),
                     repeat(j_re),
                     repeat(j_im),
@@ -580,7 +585,7 @@ class MandelbrotApp:
                     re_max,
                     im_min,
                     im_max,
-                    palette,
+                    palette_colors,
                     fractal_type,
                     j_re,
                     j_im,
@@ -620,9 +625,6 @@ class MandelbrotApp:
         self.root.update_idletasks()
 
         self.canvas.config(width=width, height=height)
-        # Forza la finestra principale ad adattarsi alle nuove dimensioni del canvas
-        # mantenendo la possibilità di ridimensionarla manualmente.
-        self.root.geometry("")
         image = tk.PhotoImage(width=width, height=height)
         self.canvas.delete("all")
         self.canvas.create_image((0, 0), image=image, state="normal", anchor=tk.NW)
@@ -630,9 +632,12 @@ class MandelbrotApp:
         start = time.perf_counter()
 
         # Se la finestra è simmetrica sull'asse reale calcoliamo solo metà righe.
-        symmetry_eps = (im_max - im_min) * 1e-12 + 1e-15
-        use_symmetry = (fractal_type == "Mandelbrot") and (abs(im_max + im_min) <= symmetry_eps)
+        # Usiamo un margine di errore proporzionale alla scala dello zoom
+        use_symmetry = (fractal_type == "Mandelbrot") and (abs(im_max + im_min) < 1e-12)
         y_values = list(range((height + 1) // 2)) if use_symmetry else list(range(height))
+
+        # Ottimizzazione: pre-calcola la palette per evitare migliaia di formattazioni stringa
+        palette_colors = [color_from_iter(i, max_iter, palette) for i in range(max_iter + 1)]
 
         self._render_rows(
             image,
@@ -647,7 +652,7 @@ class MandelbrotApp:
             use_symmetry,
             use_mp,
             workers,
-            palette,
+            palette_colors,
             fractal_type,
             j_re,
             j_im,
