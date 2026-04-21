@@ -2,6 +2,13 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file.
 
+## [1.4.0] - 2026-04-21
+### Aggiunto
+- **Finestra Adattiva**: La finestra principale ora si ridimensiona dinamicamente in base alle dimensioni dell'immagine generata (Preview e HQ).
+- **Sidebar Intelligente**: La barra di scorrimento laterale appare solo se i controlli eccedono l'altezza della finestra; lo scroll del mouse è inibito quando non necessario.
+- Esteso il limite massimo di iterazioni a **5000** per esplorazioni più profonde.
+- Documentazione interna del codice migliorata con commenti tecnici.
+
 ## [1.3.2] - 2026-04-20
 ### Aggiunto
 - Sezione `Note repository` nel README con indicazioni sui file non sincronizzati.
@@ -15,41 +22,21 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 - Campo di input manuale per `Iterazioni massime`, in aggiunta allo slider.
 
 ### Cambiato
-- `Reset Globale` ora rispetta la modalità attiva:
-  - in **Anteprima** resta in Anteprima
-  - in **HQ** resta in HQ
+- `Reset Globale` ora rispetta la modalità attiva: in **Anteprima** resta in Anteprima, in **HQ** resta in HQ.
 
-## [1.3.0] - 2026-04-20
-### Aggiunto
-- Nuove palette gradienti: **Ocean**, **Sunset**, **Ice**, **Aurora**, **Viridis**, **Neon**.
-- Pulsante **Palette casuale** per cambiare rapidamente combinazione colori.
-
-### Cambiato
-- Click sinistro e drag mantengono la modalità corrente:
-  - in **Anteprima** restano in Anteprima
-  - in **HQ** restano in HQ
-- Il cambio palette non forza più il passaggio `Anteprima -> HQ`, ma applica il colore direttamente alla modalità attiva.
-
-### Corretto
-- Ripulito il file `CHANGELOG.md` da marker di conflitto di merge lasciati accidentalmente.
-
-## [1.2.0] - 2024-05-22
+## [1.2.0] - 2026-04-20
 ### Aggiunto
 - Supporto per l'**Insieme di Julia**.
 - Selettore dinamico nel pannello parametri per passare tra Mandelbrot e Julia.
 - Gestione automatica della centratura e dei limiti della vista al cambio di frattale.
-- Finestra completamente ridimensionabile.
-- Adattamento automatico della finestra alle dimensioni `Larghezza`/`Altezza` impostate.
-
+- Ottimizzazione del loop di calcolo (riduzione moltiplicazioni ridondanti).
+- Finestra ora completamente ridimensionabile.
 ### Cambiato
 - Disabilitato il rendering HQ automatico dopo le interazioni mouse: l'app ora rimane in anteprima finché non viene richiesto manualmente il rendering HQ.
 
-### Ottimizzato
-- Ottimizzazione del loop di calcolo (riduzione moltiplicazioni ridondanti).
-
 ## [1.1.0] - 2024-05-21
 ### Aggiunto
-- Funzionalita' di salvataggio dell'immagine in formato **PNG**.
+- Funzionalità di salvataggio dell'immagine in formato **PNG**.
 - Sistema di navigazione tramite **rettangolo di selezione** (click e trascina) per uno zoom preciso.
 - Nuova palette **Emerald** ad alto contrasto.
 - Gestione dinamica dell'aspect ratio per evitare distorsioni durante lo zoom.

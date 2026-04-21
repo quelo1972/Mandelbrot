@@ -49,25 +49,17 @@ PALETTE_NAMES = [
 ]
 
 
-def calculate_fractal_point(p_re: float, p_im: float, max_iter: int, 
-                           fractal_type: str, j_re: float, j_im: float) -> int:
-    """Calcola le iterazioni per un punto dato il tipo di frattale."""
-    if fractal_type == "Mandelbrot":
-        # Test rapido cardioide/bulbo (solo per Mandelbrot)
-        c_re, c_im = p_re, p_im
-        c_im2 = c_im * c_im
-        x = c_re - 0.25
-        q = x * x + c_im2
-        if q * (q + x) <= 0.25 * c_im2:
-            return max_iter
-        if (c_re + 1.0) * (c_re + 1.0) + c_im2 <= 0.0625:
-            return max_iter
-        z_re, z_im = 0.0, 0.0
-    else:
-        # Julia: il punto è z0, c è la costante scelta
-        z_re, z_im = p_re, p_im
-        c_re, c_im = j_re, j_im
+def calculate_mandelbrot_point(c_re: float, c_im: float, max_iter: int) -> int:
+    """Calcola le iterazioni per un punto del Mandelbrot."""
+    c_im2 = c_im * c_im
+    x = c_re - 0.25
+    q = x * x + c_im2
+    if q * (q + x) <= 0.25 * c_im2:
+        return max_iter
+    if (c_re + 1.0) * (c_re + 1.0) + c_im2 <= 0.0625:
+        return max_iter
 
+    z_re, z_im = 0.0, 0.0
     for i in range(max_iter):
         r2 = z_re * z_re
         i2 = z_im * z_im
@@ -79,16 +71,29 @@ def calculate_fractal_point(p_re: float, p_im: float, max_iter: int,
     return max_iter
 
 
-def color_from_iter(it: int, max_iter: int, palette: str = "Classic") -> str:
-    """Mappa il numero di iterazioni in un colore RGB esadecimale basato sulla palette."""
-    def _lerp_color(stops: list[tuple[float, int, int, int]], v: float) -> str:
+def calculate_julia_point(z_re: float, z_im: float, c_re: float, c_im: float, max_iter: int) -> int:
+    """Calcola le iterazioni per un punto di Julia."""
+    for i in range(max_iter):
+        r2 = z_re * z_re
+        i2 = z_im * z_im
+        if r2 + i2 > 4.0:
+            return i
+        z_im = (z_re + z_re) * z_im + c_im
+        z_re = r2 - i2 + c_re
+
+    return max_iter
+
+
+def color_from_iter(it: int, max_iter: int, palette: str = "Classic") -> tuple[int, int, int]:
+    """Mappa il numero di iterazioni in un colore RGB."""
+    def _lerp_color(stops: list[tuple[float, int, int, int]], v: float) -> tuple[int, int, int]:
         """Interpolazione lineare tra stop colore (posizione, r, g, b)."""
         if v <= stops[0][0]:
             _, r, g, b = stops[0]
-            return f"#{r:02x}{g:02x}{b:02x}"
+            return r, g, b
         if v >= stops[-1][0]:
             _, r, g, b = stops[-1]
-            return f"#{r:02x}{g:02x}{b:02x}"
+            return r, g, b
 
         for idx in range(1, len(stops)):
             p1, r1, g1, b1 = stops[idx]
@@ -98,26 +103,26 @@ def color_from_iter(it: int, max_iter: int, palette: str = "Classic") -> str:
                 r = int(r0 + (r1 - r0) * local_t)
                 g = int(g0 + (g1 - g0) * local_t)
                 b = int(b0 + (b1 - b0) * local_t)
-                return f"#{r:02x}{g:02x}{b:02x}"
-        return "#000000"
+                return r, g, b
+        return 0, 0, 0
 
     if it == max_iter:
-        return "#000000"
+        return 0, 0, 0
     t = it / max_iter
 
     if palette == "Grayscale":
         v = int(255 * t)
-        return f"#{v:02x}{v:02x}{v:02x}"
+        return v, v, v
     if palette == "Fire":
         r = int(min(255, t * 255 * 3))
         g = int(min(255, max(0, t * 255 * 3 - 255)))
         b = int(min(255, max(0, t * 255 * 3 - 510)))
-        return f"#{r:02x}{g:02x}{b:02x}"
+        return r, g, b
     if palette == "Emerald":
         r = int(min(255, max(0, t * 255 * 3 - 255)))
         g = int(min(255, t * 255 * 3))
         b = int(max(0, t * 255 * 3 - 510))
-        return f"#{r:02x}{g:02x}{b:02x}"
+        return r, g, b
     if palette == "Ocean":
         return _lerp_color(
             [
@@ -189,10 +194,10 @@ def color_from_iter(it: int, max_iter: int, palette: str = "Classic") -> str:
     r = int(9 * (1 - t) * t * t * t * 255)
     g = int(15 * (1 - t) * (1 - t) * t * t * 255)
     b = int(8.5 * (1 - t) * (1 - t) * (1 - t) * t * 255)
-    return f"#{r:02x}{g:02x}{b:02x}"
+    return r, g, b
 
 
-def compute_row_data(
+def _compute_row_data_mandelbrot(
     y: int,
     width: int,
     height: int,
@@ -201,23 +206,61 @@ def compute_row_data(
     re_max: float,
     im_min: float,
     im_max: float,
-    palette_colors: list[str],
-    fractal_type: str,
-    j_re: float,
-    j_im: float,
-) -> tuple[int, str]:
-    """Calcola una singola riga (y) dell'immagine e la restituisce pronta per PhotoImage.put."""
+    palette_colors: list[tuple[int, int, int]],
+) -> tuple[int, bytes]:
+    """Calcola una riga del Mandelbrot come RGB binario."""
     x_div = max(width - 1, 1)
     y_div = max(height - 1, 1)
-    c_im = im_max - (y / y_div) * (im_max - im_min)
+    re_step = (re_max - re_min) / x_div
+    c_im = im_max - y * ((im_max - im_min) / y_div)
 
-    row = []
-    for x in range(width):
-        c_re = re_min + (x / x_div) * (re_max - re_min)
-        it = calculate_fractal_point(c_re, c_im, max_iter, fractal_type, j_re, j_im)
-        row.append(palette_colors[it])
+    row = bytearray(width * 3)
+    c_re = re_min
+    idx = 0
+    for _ in range(width):
+        it = calculate_mandelbrot_point(c_re, c_im, max_iter)
+        r, g, b = palette_colors[it]
+        row[idx] = r
+        row[idx + 1] = g
+        row[idx + 2] = b
+        idx += 3
+        c_re += re_step
 
-    return y, "{" + " ".join(row) + "}"
+    return y, bytes(row)
+
+
+def _compute_row_data_julia(
+    y: int,
+    width: int,
+    height: int,
+    max_iter: int,
+    re_min: float,
+    re_max: float,
+    im_min: float,
+    im_max: float,
+    palette_colors: list[tuple[int, int, int]],
+    j_re: float,
+    j_im: float,
+) -> tuple[int, bytes]:
+    """Calcola una riga di Julia come RGB binario."""
+    x_div = max(width - 1, 1)
+    y_div = max(height - 1, 1)
+    re_step = (re_max - re_min) / x_div
+    z_im = im_max - y * ((im_max - im_min) / y_div)
+
+    row = bytearray(width * 3)
+    z_re = re_min
+    idx = 0
+    for _ in range(width):
+        it = calculate_julia_point(z_re, z_im, j_re, j_im, max_iter)
+        r, g, b = palette_colors[it]
+        row[idx] = r
+        row[idx + 1] = g
+        row[idx + 2] = b
+        idx += 3
+        z_re += re_step
+
+    return y, bytes(row)
 
 
 class MandelbrotApp:
@@ -226,7 +269,7 @@ class MandelbrotApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("Insieme di Mandelbrot")
-        self.root.geometry("1240x780")
+        # La geometria fissa è stata rimossa per permettere alla finestra di adattarsi al contenuto
 
         cpu = os.cpu_count() or 2
 
@@ -266,15 +309,32 @@ class MandelbrotApp:
         controls = ttk.Frame(side_canvas)
         side_window = side_canvas.create_window((0, 0), window=controls, anchor="nw")
 
-        # Aggiorna l'area di scrolling quando il contenuto cambia
-        controls.bind("<Configure>", lambda e: side_canvas.configure(scrollregion=side_canvas.bbox("all")))
-        # Forza la larghezza del frame interno a quella del canvas
-        side_canvas.bind("<Configure>", lambda e: side_canvas.itemconfig(side_window, width=e.width))
+        def _update_sidebar_layout(event=None):
+            """
+            Calcola dinamicamente se i widget nel pannello superano l'altezza visibile.
+            Se il contenuto ci sta tutto, nasconde la scrollbar.
+            """
+            side_canvas.configure(scrollregion=side_canvas.bbox("all"))
+            if side_canvas.bbox("all")[3] <= side_canvas.winfo_height():
+                scrollbar.pack_forget()
+            else:
+                scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # Gestione rotella mouse per il pannello laterale
+        controls.bind("<Configure>", _update_sidebar_layout)
+        # Assicura che la larghezza dei controlli segua il canvas e aggiorna il layout
+        side_canvas.bind("<Configure>", lambda e: (
+            side_canvas.itemconfig(side_window, width=e.width),
+            _update_sidebar_layout()
+        ))
+
         def _on_sidebar_scroll(event):
-            if event.num == 4 or event.delta > 0: side_canvas.yview_scroll(-1, "units")
-            elif event.num == 5 or event.delta < 0: side_canvas.yview_scroll(1, "units")
+            """
+            Gestisce lo scrolling con il mouse solo se il contenuto 
+            effettivamente eccede l'altezza del contenitore.
+            """
+            if side_canvas.bbox("all")[3] > side_canvas.winfo_height():
+                if event.num == 4 or event.delta > 0: side_canvas.yview_scroll(-1, "units")
+                elif event.num == 5 or event.delta < 0: side_canvas.yview_scroll(1, "units")
 
         side_canvas.bind("<Enter>", lambda _: side_canvas.bind_all("<MouseWheel>", _on_sidebar_scroll))
         side_canvas.bind("<Enter>", lambda _: side_canvas.bind_all("<Button-4>", _on_sidebar_scroll), add="+")
@@ -299,7 +359,7 @@ class MandelbrotApp:
         iter_scale = ttk.Scale(
             controls,
             from_=20,
-            to=2500,
+            to=5000, # Limite esteso per visualizzare dettagli più profondi
             orient=tk.HORIZONTAL,
             variable=self.max_iter_var,
         )
@@ -390,6 +450,8 @@ class MandelbrotApp:
         self.last_drag_preview_ts = 0.0
         self.zoom_rect_id: int | None = None
         self.last_render_preview = True
+        self._executor: ProcessPoolExecutor | None = None
+        self._executor_workers: int | None = None
 
         self.canvas.bind("<ButtonPress-1>", self.on_left_press)
         self.canvas.bind("<B1-Motion>", self.on_left_drag)
@@ -397,6 +459,7 @@ class MandelbrotApp:
         self.canvas.bind("<MouseWheel>", self.on_mouse_wheel)
         self.canvas.bind("<Button-4>", self.on_mouse_wheel)
         self.canvas.bind("<Button-5>", self.on_mouse_wheel)
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.render(preview=True)
 
@@ -486,6 +549,29 @@ class MandelbrotApp:
         """Callback timer: lancia effettivamente il render HQ."""
         self.hq_after_id = None
         self.render(preview=False)
+
+    def _get_executor(self, workers: int) -> ProcessPoolExecutor:
+        """Ritorna un pool persistente, ricreandolo solo se cambia la configurazione."""
+        if self._executor is None or self._executor_workers != workers:
+            self._shutdown_executor()
+            self._executor = ProcessPoolExecutor(max_workers=workers)
+            self._executor_workers = workers
+        return self._executor
+
+    def _shutdown_executor(self) -> None:
+        """Chiude il pool multiprocesso se attivo."""
+        if self._executor is not None:
+            self._executor.shutdown(wait=False, cancel_futures=True)
+            self._executor = None
+            self._executor_workers = None
+
+    def on_close(self) -> None:
+        """Chiude risorse esterne prima di terminare l'app."""
+        if self.hq_after_id is not None:
+            self.root.after_cancel(self.hq_after_id)
+            self.hq_after_id = None
+        self._shutdown_executor()
+        self.root.destroy()
 
     def on_left_press(self, event: tk.Event) -> None:
         """Inizio interazione tasto sinistro: prepara stato drag."""
@@ -682,7 +768,6 @@ class MandelbrotApp:
 
     def _render_rows(
         self,
-        image: tk.PhotoImage,
         y_values: list[int],
         width: int,
         height: int,
@@ -694,67 +779,87 @@ class MandelbrotApp:
         use_symmetry: bool,
         use_mp: bool,
         workers: int,
-        palette_colors: list[str],
+        palette_colors: list[tuple[int, int, int]],
         fractal_type: str,
         j_re: float,
         j_im: float,
-    ) -> None:
-        """Renderizza righe su PhotoImage in single-process o multiprocesso."""
+    ) -> bytes:
+        """Calcola tutte le righe e restituisce il buffer RGB completo."""
         total = len(y_values)
+        row_stride = width * 3
+        frame = bytearray(height * row_stride)
+        row_func = _compute_row_data_mandelbrot if fractal_type == "Mandelbrot" else _compute_row_data_julia
+
+        def write_row(y: int, row_data: bytes) -> None:
+            offset = y * row_stride
+            frame[offset:offset + row_stride] = row_data
+            if use_symmetry:
+                mirror_y = height - 1 - y
+                if mirror_y != y:
+                    mirror_offset = mirror_y * row_stride
+                    frame[mirror_offset:mirror_offset + row_stride] = row_data
 
         if use_mp and workers > 1:
-            with ProcessPoolExecutor(max_workers=workers) as executor:
-                rows_iter = executor.map(
-                    compute_row_data,
-                    y_values,
-                    repeat(width),
-                    repeat(height),
-                    repeat(max_iter),
-                    repeat(re_min),
-                    repeat(re_max),
-                    repeat(im_min),
-                    repeat(im_max),
-                    repeat(palette_colors),
-                    repeat(fractal_type),
-                    repeat(j_re),
-                    repeat(j_im),
-                    chunksize=8,
-                )
-                for idx, (y, row_data) in enumerate(rows_iter, 1):
-                    image.put(row_data, to=(0, y))
-                    if use_symmetry:
-                        mirror_y = height - 1 - y
-                        if mirror_y != y:
-                            image.put(row_data, to=(0, mirror_y))
-                    if idx % 25 == 0: # Aggiornamento UI meno frequente per massimizzare throughput
-                        pct = int((idx / total) * 100)
-                        self.status_var.set(f"Generazione in corso... {pct}%")
-                        self.root.update_idletasks()
+            executor = self._get_executor(workers)
+            common_args = [
+                repeat(width),
+                repeat(height),
+                repeat(max_iter),
+                repeat(re_min),
+                repeat(re_max),
+                repeat(im_min),
+                repeat(im_max),
+                repeat(palette_colors),
+            ]
+            extra_args = [] if fractal_type == "Mandelbrot" else [repeat(j_re), repeat(j_im)]
+            rows_iter = executor.map(
+                row_func,
+                y_values,
+                *common_args,
+                *extra_args,
+                chunksize=8,
+            )
+            for idx, (y, row_data) in enumerate(rows_iter, 1):
+                write_row(y, row_data)
+                if idx % 25 == 0: # Aggiornamento UI meno frequente per massimizzare throughput
+                    pct = int((idx / total) * 100)
+                    self.status_var.set(f"Generazione in corso... {pct}%")
+                    self.root.update_idletasks()
         else:
             for idx, y in enumerate(y_values, 1):
-                _, row_data = compute_row_data(
-                    y,
-                    width,
-                    height,
-                    max_iter,
-                    re_min,
-                    re_max,
-                    im_min,
-                    im_max,
-                    palette_colors,
-                    fractal_type,
-                    j_re,
-                    j_im,
-                )
-                image.put(row_data, to=(0, y))
-                if use_symmetry:
-                    mirror_y = height - 1 - y
-                    if mirror_y != y:
-                        image.put(row_data, to=(0, mirror_y))
+                if fractal_type == "Mandelbrot":
+                    _, row_data = row_func(
+                        y,
+                        width,
+                        height,
+                        max_iter,
+                        re_min,
+                        re_max,
+                        im_min,
+                        im_max,
+                        palette_colors,
+                    )
+                else:
+                    _, row_data = row_func(
+                        y,
+                        width,
+                        height,
+                        max_iter,
+                        re_min,
+                        re_max,
+                        im_min,
+                        im_max,
+                        palette_colors,
+                        j_re,
+                        j_im,
+                    )
+                write_row(y, row_data)
                 if idx % 25 == 0:
                     pct = int((idx / total) * 100)
                     self.status_var.set(f"Generazione in corso... {pct}%")
                     self.root.update_idletasks()
+
+        return bytes(frame)
 
     def render(self, preview: bool) -> None:
         """Pipeline completa di rendering (anteprima o HQ)."""
@@ -781,10 +886,9 @@ class MandelbrotApp:
         self.root.update_idletasks()
 
         self.canvas.config(width=width, height=height)
-        image = tk.PhotoImage(width=width, height=height)
-        self.canvas.delete("all")
-        self.canvas.create_image((0, 0), image=image, state="normal", anchor=tk.NW)
-
+        # Forza la finestra principale a ricalcolare le proprie dimensioni 
+        # in base alla nuova dimensione del canvas dell'immagine.
+        self.root.geometry("")
         start = time.perf_counter()
 
         # Se la finestra è simmetrica sull'asse reale calcoliamo solo metà righe.
@@ -795,8 +899,7 @@ class MandelbrotApp:
         # Ottimizzazione: pre-calcola la palette per evitare migliaia di formattazioni stringa
         palette_colors = [color_from_iter(i, max_iter, palette) for i in range(max_iter + 1)]
 
-        self._render_rows(
-            image,
+        frame_data = self._render_rows(
             y_values,
             width,
             height,
@@ -813,6 +916,24 @@ class MandelbrotApp:
             j_re,
             j_im,
         )
+
+        ppm_header = f"P6\n{width} {height}\n255\n".encode("ascii")
+        try:
+            image = tk.PhotoImage(data=ppm_header + frame_data, format="PPM")
+        except tk.TclError:
+            image = tk.PhotoImage(width=width, height=height)
+            row_stride = width * 3
+            for y in range(height):
+                start_idx = y * row_stride
+                row = frame_data[start_idx:start_idx + row_stride]
+                colors = [
+                    f"#{row[idx]:02x}{row[idx + 1]:02x}{row[idx + 2]:02x}"
+                    for idx in range(0, row_stride, 3)
+                ]
+                image.put("{" + " ".join(colors) + "}", to=(0, y))
+
+        self.canvas.delete("all")
+        self.canvas.create_image((0, 0), image=image, state="normal", anchor=tk.NW)
 
         elapsed = (time.perf_counter() - start) * 1000.0
         self.last_render_preview = preview

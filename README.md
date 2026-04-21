@@ -1,6 +1,6 @@
 # Fractal Viewer (Mandelbrot & Julia - Python + Tkinter)
 
-Visualizzatore interattivo degli insiemi di Mandelbrot e Julia scritto in Python, senza dipendenze esterne.
+Visualizzatore interattivo degli insiemi di Mandelbrot e Julia scritto in Python (v1.4.0), senza dipendenze esterne.
 
 ## Requisiti
 
@@ -32,17 +32,16 @@ Si ottiene fissando una costante complessa $c$ per tutta l'immagine e variando i
 
 - Selettore rapido tra i due tipi di frattale.
 - Controllo dinamico di:
-  - risoluzione (`Larghezza`, `Altezza`)
-  - iterazioni massime (slider + inserimento manuale da casella testo)
+  - risoluzione (`Larghezza`, `Altezza`) con **adattamento automatico della finestra**
+  - iterazioni massime (fino a **5000**, con slider + inserimento manuale da casella testo)
   - finestra del piano complesso (`Re`/`Im` min e max)
 - Esportazione dell'immagine in formato **PNG**.
-- Scelta tra diverse palette di colori:
-  - **Classic**, **Grayscale**, **Fire**, **Emerald**
-  - **Ocean**, **Sunset**, **Ice**, **Aurora**, **Viridis**, **Neon**
-- Pulsante **Palette casuale** per provare rapidamente gradienti diversi.
+- Scelta tra diverse palette di colori: **Classic**, **Grayscale**, **Fire**, **Emerald**.
 - Due modalita' di rendering:
   - `Anteprima`: piu' veloce (riduce risoluzione e iterazioni)
   - `Genera HQ`: rendering finale ad alta qualita'
+- UI ottimizzata:
+  - Pannello parametri con scrolling intelligente (la barra appare solo se necessaria).
 - Ottimizzazioni:
   - test rapido cardioide/bulbo
   - simmetria sull'asse reale (quando applicabile)
@@ -50,24 +49,19 @@ Si ottiene fissando una costante complessa $c$ per tutta l'immagine e variando i
 
 ## Controlli mouse
 
-- `Click sinistro`: ricentra la vista mantenendo il livello di zoom.
 - `Click sinistro + trascina`: disegna un rettangolo per selezionare l'area di zoom.
 - `Rotella`: zoom in/out centrato sul centro della vista.
 
-La modalità viene mantenuta durante la navigazione:
-- se stai lavorando in **Anteprima**, click/drag/cambio palette restano in Anteprima
-- se stai lavorando in **HQ**, click/drag/cambio palette restano in HQ
-
-Anche **Reset Globale** rispetta la modalità corrente (non forza più il passaggio ad Anteprima).
+Dopo le interazioni con il mouse, l'app rimane in modalità **Anteprima** per permettere una navigazione fluida. Usa il pulsante **Genera HQ** per il calcolo finale.
 
 ## Parametri consigliati
 
 - Esplorazione rapida:
   - `Fattore preview`: 3-6
-  - `Iterazioni`: 100-300
+  - `Iterazioni`: 120-500
 - Render di dettaglio:
   - `Fattore preview`: 2
-  - `Iterazioni`: 800+
+  - `Iterazioni`: 1000-5000
   - `Usa multiprocesso (HQ)`: attivo
 
 ## Risoluzione problemi
