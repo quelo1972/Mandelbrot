@@ -311,6 +311,7 @@ class MandelbrotApp:
         self.fractal_type_var = tk.StringVar(value=DEFAULTS["type"])
         self.julia_re_var = tk.StringVar(value=str(DEFAULTS["julia_re"]))
         self.julia_im_var = tk.StringVar(value=str(DEFAULTS["julia_im"]))
+        self.sync_julia_var = tk.BooleanVar(value=False)
 
         container = ttk.Frame(root, padding=8)
         container.pack(fill=tk.BOTH, expand=True)
@@ -414,6 +415,12 @@ class MandelbrotApp:
         ttk.Button(controls, text="Palette casuale", command=self.randomize_palette).pack(
             fill=tk.X, padx=8, pady=(4, 2)
         )
+
+        # Nuova sezione per la relazione Mandelbrot-Julia
+        rel_frame = ttk.LabelFrame(controls, text="Analisi Julia")
+        rel_frame.pack(fill=tk.X, padx=8, pady=8)
+        ttk.Checkbutton(rel_frame, text="Auto-Julia al click", variable=self.sync_julia_var).pack(anchor="w", padx=4)
+        ttk.Button(rel_frame, text="Copia centro in C", command=self.sync_c_from_center).pack(fill=tk.X, padx=4, pady=2)
 
         buttons = ttk.Frame(controls)
         buttons.pack(fill=tk.X, pady=8, padx=8)
@@ -684,6 +691,18 @@ class MandelbrotApp:
             im_half = (im_max - im_min) / 2.0
             self._set_view_window(c_re - re_half, c_re + re_half, c_im - im_half, c_im + im_half)
 
+            # Se la sincronizzazione è attiva e siamo su Mandelbrot, switchiamo a Julia
+            if self.sync_julia_var.get() and self.fractal_type_var.get() == "Mandelbrot":
+                self.julia_re_var.set(f"{c_re:.10f}")
+                self.julia_im_var.set(f"{c_im:.10f}")
+                self.fractal_type_var.set("Julia")
+                # Per Julia è meglio tornare alla vista predefinita per vedere l'intero set
+                self._set_view_window(*VIEW_PRESETS["Julia"])
+            else:
+                re_half = (re_max - re_min) / 2.0
+                im_half = (im_max - im_min) / 2.0
+                self._set_view_window(c_re - re_half, c_re + re_half, c_im - im_half, c_im + im_half)
+
         # Mantiene la stessa "superficie" d'interazione:
         # click/drag in preview -> render preview, click/drag in HQ -> render HQ.
         self.render(preview=self.drag_start_preview_mode)
@@ -739,6 +758,16 @@ class MandelbrotApp:
             return
         self.palette_var.set(random.choice(choices))
         self.on_palette_change()
+
+    def sync_c_from_center(self) -> None:
+        """Copia le coordinate centrali attuali nei parametri di Julia."""
+        try:
+            re_min, re_max, im_min, im_max = self._read_view_window()
+            self.julia_re_var.set(f"{(re_min + re_max)/2:.10f}")
+            self.julia_im_var.set(f"{(im_min + im_max)/2:.10f}")
+            self.status_var.set("Parametri Julia aggiornati dal centro vista.")
+        except ValueError:
+            pass
 
     def on_fractal_type_change(self, event: tk.Event = None) -> None:
         """Aggiorna le coordinate e renderizza quando si cambia il tipo di frattale."""

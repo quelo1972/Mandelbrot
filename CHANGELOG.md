@@ -2,6 +2,12 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file.
 
+## [1.5.0] - 2026-04-21
+### Aggiunto
+- **Relazione Mandelbrot-Julia**: Nuova sezione "Analisi Julia" nella sidebar.
+- **Esplorazione Dinamica**: Aggiunta opzione per generare l'insieme di Julia cliccando direttamente sui punti dell'insieme di Mandelbrot.
+- **Sincronizzazione C**: Funzione per copiare le coordinate centrali della vista nei parametri $c$ di Julia.
+
 ## [1.4.1] - 2026-04-21
 ### Cambiato
 - **Coerenza Rendering**: Lo zoom (rotella) e il cambio di tipo di frattale ora rispettano la modalità di rendering corrente. 
