@@ -2,6 +2,11 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file.
 
+## [1.4.1] - 2026-04-21
+### Cambiato
+- **Coerenza Rendering**: Lo zoom (rotella) e il cambio di tipo di frattale ora rispettano la modalità di rendering corrente. 
+- Se l'utente è in modalità **HQ**, le operazioni di zoom e switch mantengono l'alta qualità senza forzare il passaggio dall'anteprima.
+
 ## [1.4.0] - 2026-04-21
 ### Aggiunto
 - **Finestra Adattiva**: La finestra principale ora si ridimensiona dinamicamente in base alle dimensioni dell'immagine generata (Preview e HQ).

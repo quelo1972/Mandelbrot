@@ -1,6 +1,6 @@
 # Fractal Viewer (Mandelbrot & Julia - Python + Tkinter)
 
-Visualizzatore interattivo degli insiemi di Mandelbrot e Julia scritto in Python (v1.4.0), senza dipendenze esterne.
+Visualizzatore interattivo degli insiemi di Mandelbrot e Julia scritto in Python (v1.4.1), senza dipendenze esterne.
 
 ## Requisiti
 
@@ -52,7 +52,7 @@ Si ottiene fissando una costante complessa $c$ per tutta l'immagine e variando i
 - `Click sinistro + trascina`: disegna un rettangolo per selezionare l'area di zoom.
 - `Rotella`: zoom in/out centrato sul centro della vista.
 
-Dopo le interazioni con il mouse, l'app rimane in modalità **Anteprima** per permettere una navigazione fluida. Usa il pulsante **Genera HQ** per il calcolo finale.
+Le interazioni (zoom e cambio frattale) rispettano la modalità di rendering corrente: se la visualizzazione è in **HQ**, il risultato rimarrà in alta qualità senza tornare in anteprima.
 
 ## Parametri consigliati
 

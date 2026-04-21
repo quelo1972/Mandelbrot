@@ -694,14 +694,15 @@ class MandelbrotApp:
         new_re_span = (re_max - re_min) * factor
         new_im_span = (im_max - im_min) * factor
 
+        was_preview = self.last_render_preview
+
         self._set_view_window(
             mouse_re - nx * new_re_span,
             mouse_re + (1 - nx) * new_re_span,
             mouse_im - (1 - ny) * new_im_span,
             mouse_im + ny * new_im_span
         )
-        self.render(preview=True)
-        self._schedule_hq_render()
+        self.render(preview=was_preview)
 
     def on_palette_change(self) -> None:
         """Aggiorna la vista quando la palette viene cambiata."""
@@ -720,8 +721,7 @@ class MandelbrotApp:
         """Aggiorna le coordinate e renderizza quando si cambia il tipo di frattale."""
         preset = VIEW_PRESETS.get(self.fractal_type_var.get(), VIEW_PRESETS["Mandelbrot"])
         self._set_view_window(*preset)
-        self.render(preview=True)
-        self._schedule_hq_render()
+        self.render(preview=self.last_render_preview)
 
     def reset_defaults(self) -> None:
         """Ripristina tutti i parametri di default e rigenera anteprima."""
