@@ -46,6 +46,8 @@ PALETTE_NAMES = [
     "Aurora",
     "Viridis",
     "Neon",
+    "Cyberpunk",
+    "Magma",
 ]
 
 
@@ -186,6 +188,27 @@ def color_from_iter(it: int, max_iter: int, palette: str = "Classic") -> tuple[i
                 (0.50, 0, 224, 255),
                 (0.75, 57, 255, 20),
                 (1.00, 255, 255, 0),
+            ],
+            t,
+        )
+    if palette == "Cyberpunk":
+        return _lerp_color(
+            [
+                (0.00, 43, 0, 122),
+                (0.33, 255, 0, 110),
+                (0.66, 0, 255, 255),
+                (1.00, 255, 255, 255),
+            ],
+            t,
+        )
+    if palette == "Magma":
+        return _lerp_color(
+            [
+                (0.00, 0, 0, 4),
+                (0.25, 80, 18, 123),
+                (0.50, 182, 54, 121),
+                (0.75, 251, 136, 97),
+                (1.00, 252, 253, 191),
             ],
             t,
         )
