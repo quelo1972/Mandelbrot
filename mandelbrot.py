@@ -370,14 +370,24 @@ class MandelbrotApp:
         canvas_frame = ttk.Frame(container)
         canvas_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
+        canvas_v_scrollbar = ttk.Scrollbar(canvas_frame, orient="vertical")
+        canvas_v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas_h_scrollbar = ttk.Scrollbar(canvas_frame, orient="horizontal")
+        canvas_h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+
         self.canvas = tk.Canvas(
             canvas_frame,
             width=DEFAULTS["width"],
             height=DEFAULTS["height"],
             highlightthickness=0,
             bg="black",
+            xscrollcommand=canvas_h_scrollbar.set,
+            yscrollcommand=canvas_v_scrollbar.set,
         )
-        self.canvas.pack(fill=tk.BOTH, expand=True)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        canvas_v_scrollbar.config(command=self.canvas.yview)
+        canvas_h_scrollbar.config(command=self.canvas.xview)
+        self.canvas.configure(scrollregion=(0, 0, DEFAULTS["width"], DEFAULTS["height"]))
 
         ttk.Label(controls, text="Iterazioni massime").pack(anchor="w", pady=(8, 0), padx=8)
         iter_scale = ttk.Scale(
@@ -569,6 +579,10 @@ class MandelbrotApp:
         c_im = im_max - ny * (im_max - im_min)
         return c_re, c_im
 
+    def _event_canvas_xy(self, event: tk.Event) -> tuple[int, int]:
+        """Converte coordinate evento in coordinate assolute del canvas (con scroll)."""
+        return int(self.canvas.canvasx(event.x)), int(self.canvas.canvasy(event.y))
+
     def _schedule_hq_render(self) -> None:
         """Programma un render HQ ritardato, cancellando eventuali timer precedenti."""
         if self.hq_after_id is not None:
@@ -611,7 +625,7 @@ class MandelbrotApp:
             self.status_var.set("Errore: parametri complessi non validi.")
             return
 
-        self.drag_start_xy = (event.x, event.y)
+        self.drag_start_xy = self._event_canvas_xy(event)
         self.drag_start_preview_mode = self.last_render_preview
         self.drag_moved = False
         self.last_drag_preview_ts = 0.0
@@ -625,19 +639,20 @@ class MandelbrotApp:
             return
 
         start_x, start_y = self.drag_start_xy
+        event_x, event_y = self._event_canvas_xy(event)
         
         # Soglia minima per attivare il drag
         if not self.drag_moved:
-            if abs(event.x - start_x) > 3 or abs(event.y - start_y) > 3:
+            if abs(event_x - start_x) > 3 or abs(event_y - start_y) > 3:
                 self.drag_moved = True
 
         if self.drag_moved:
             if self.zoom_rect_id:
-                self.canvas.coords(self.zoom_rect_id, start_x, start_y, event.x, event.y)
+                self.canvas.coords(self.zoom_rect_id, start_x, start_y, event_x, event_y)
             else:
                 # Crea il rettangolo tratteggiato
                 self.zoom_rect_id = self.canvas.create_rectangle(
-                    start_x, start_y, event.x, event.y,
+                    start_x, start_y, event_x, event_y,
                     outline="white", dash=(4, 4), width=1
                 )
 
@@ -652,11 +667,12 @@ class MandelbrotApp:
             self.zoom_rect_id = None
 
         re_min, re_max, im_min, im_max = self.drag_start_view
+        event_x, event_y = self._event_canvas_xy(event)
 
         if self.drag_moved:
             # Zoom nell'area selezionata
             x0, y0 = self.drag_start_xy
-            x1, y1 = event.x, event.y
+            x1, y1 = event_x, event_y
 
             # Leggiamo l'aspect ratio dai parametri target per evitare incoerenze durante il preview
             try:
@@ -686,7 +702,7 @@ class MandelbrotApp:
             )
         else:
             # Click singolo: ricentra senza cambiare livello di zoom
-            c_re, c_im = self._pixel_to_complex(event.x, event.y, re_min, re_max, im_min, im_max)
+            c_re, c_im = self._pixel_to_complex(event_x, event_y, re_min, re_max, im_min, im_max)
             re_half = (re_max - re_min) / 2.0
             im_half = (im_max - im_min) / 2.0
             self._set_view_window(c_re - re_half, c_re + re_half, c_im - im_half, c_im + im_half)
@@ -725,13 +741,14 @@ class MandelbrotApp:
             zoom_in = event.num == 4
 
         factor = 0.8 if zoom_in else 1.25
+        event_x, event_y = self._event_canvas_xy(event)
 
         # Calcola le coordinate complesse sotto il mouse e la posizione relativa
-        mouse_re, mouse_im = self._pixel_to_complex(event.x, event.y, re_min, re_max, im_min, im_max)
+        mouse_re, mouse_im = self._pixel_to_complex(event_x, event_y, re_min, re_max, im_min, im_max)
         width = self.image.width() if self.image else max(self.canvas.winfo_width(), 2)
         height = self.image.height() if self.image else max(self.canvas.winfo_height(), 2)
-        nx = min(max(event.x, 0), width - 1) / (width - 1)
-        ny = min(max(event.y, 0), height - 1) / (height - 1)
+        nx = min(max(event_x, 0), width - 1) / (width - 1)
+        ny = min(max(event_y, 0), height - 1) / (height - 1)
 
         new_re_span = (re_max - re_min) * factor
         new_im_span = (im_max - im_min) * factor
@@ -937,10 +954,6 @@ class MandelbrotApp:
         self.status_var.set(f"Generazione in corso... ({mode})")
         self.root.update_idletasks()
 
-        self.canvas.config(width=width, height=height)
-        # Forza la finestra principale a ricalcolare le proprie dimensioni 
-        # in base alla nuova dimensione del canvas dell'immagine.
-        self.root.geometry("")
         start = time.perf_counter()
 
         # Se la finestra è simmetrica sull'asse reale calcoliamo solo metà righe.
@@ -986,6 +999,7 @@ class MandelbrotApp:
 
         self.canvas.delete("all")
         self.canvas.create_image((0, 0), image=image, state="normal", anchor=tk.NW)
+        self.canvas.configure(scrollregion=(0, 0, width, height))
 
         elapsed = (time.perf_counter() - start) * 1000.0
         self.last_render_preview = preview
