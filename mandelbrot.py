@@ -401,7 +401,9 @@ class MandelbrotApp:
         iter_entry_row = ttk.Frame(controls)
         iter_entry_row.pack(fill=tk.X, padx=8, pady=(2, 0))
         ttk.Label(iter_entry_row, text="Valore").pack(side=tk.LEFT)
-        ttk.Entry(iter_entry_row, textvariable=self.max_iter_var, width=10).pack(side=tk.RIGHT)
+        iter_entry = ttk.Entry(iter_entry_row, textvariable=self.max_iter_var, width=10)
+        iter_entry.pack(side=tk.RIGHT)
+        self._bind_entry_submit(iter_entry)
 
         ttk.Label(controls, text="Tipo Frattale").pack(anchor="w", padx=8, pady=(4, 0))
         type_combo = ttk.Combobox(
@@ -508,7 +510,22 @@ class MandelbrotApp:
         frame = ttk.Frame(parent)
         frame.pack(fill=tk.X, padx=8, pady=2)
         ttk.Label(frame, text=label, width=13).pack(side=tk.LEFT)
-        ttk.Entry(frame, textvariable=variable, width=12).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        entry = ttk.Entry(frame, textvariable=variable, width=12)
+        entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self._bind_entry_submit(entry)
+
+    def _bind_entry_submit(self, entry: ttk.Entry) -> None:
+        """Associa il tasto Invio nelle Entry al render della modalità corrente."""
+        entry.bind("<Return>", self.on_entry_submit)
+        entry.bind("<KP_Enter>", self.on_entry_submit)
+
+    def on_entry_submit(self, event: tk.Event | None = None) -> str:
+        """Renderizza in anteprima o HQ in base all'ultima modalità attiva."""
+        if self.hq_after_id is not None:
+            self.root.after_cancel(self.hq_after_id)
+            self.hq_after_id = None
+        self.render(preview=self.last_render_preview)
+        return "break"
 
     def _read_params(self) -> tuple:
         """Legge e valida i parametri UI per il rendering."""
