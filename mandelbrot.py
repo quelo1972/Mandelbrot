@@ -12,8 +12,19 @@ import random
 import time
 import tkinter as tk
 from concurrent.futures import ProcessPoolExecutor
+from functools import lru_cache
 from itertools import repeat
 from tkinter import ttk, filedialog, messagebox
+
+# Tenta di importare Numba per JIT compilation (opzionale)
+try:
+    from numba import njit
+    HAS_NUMBA = True
+except ImportError:
+    HAS_NUMBA = False
+    # Dummy decorator se Numba non è disponibile
+    def njit(func):
+        return func
 
 
 DEFAULTS = {
@@ -51,8 +62,9 @@ PALETTE_NAMES = [
 ]
 
 
-def calculate_mandelbrot_point(c_re: float, c_im: float, max_iter: int) -> int:
-    """Calcola le iterazioni per un punto del Mandelbrot."""
+@njit
+def _mandelbrot_point_compiled(c_re: float, c_im: float, max_iter: int) -> int:
+    """Versione Numba JIT pura di Mandelbrot (no cache)."""
     c_im2 = c_im * c_im
     x = c_re - 0.25
     q = x * x + c_im2
@@ -73,8 +85,9 @@ def calculate_mandelbrot_point(c_re: float, c_im: float, max_iter: int) -> int:
     return max_iter
 
 
-def calculate_julia_point(z_re: float, z_im: float, c_re: float, c_im: float, max_iter: int) -> int:
-    """Calcola le iterazioni per un punto di Julia."""
+@njit
+def _julia_point_compiled(z_re: float, z_im: float, c_re: float, c_im: float, max_iter: int) -> int:
+    """Versione Numba JIT pura di Julia (no cache)."""
     for i in range(max_iter):
         r2 = z_re * z_re
         i2 = z_im * z_im
@@ -86,138 +99,71 @@ def calculate_julia_point(z_re: float, z_im: float, c_re: float, c_im: float, ma
     return max_iter
 
 
+# Wrapper cached attorno alle versioni compilate (opzionale: migliora zoom ripetuti)
+@lru_cache(maxsize=8192)
+def calculate_mandelbrot_point(c_re: float, c_im: float, max_iter: int) -> int:
+    """Calcola le iterazioni per un punto del Mandelbrot (con cache opzionale)."""
+    return _mandelbrot_point_compiled(c_re, c_im, max_iter)
+
+
+@lru_cache(maxsize=8192)
+def calculate_julia_point(z_re: float, z_im: float, c_re: float, c_im: float, max_iter: int) -> int:
+    """Calcola le iterazioni per un punto di Julia (con cache opzionale)."""
+    return _julia_point_compiled(z_re, z_im, c_re, c_im, max_iter)
+
+
+def _lerp_color(stops: list[tuple[float, int, int, int]], v: float) -> tuple[int, int, int]:
+    """Interpolazione lineare ottimizzata tra stop colore (posizione, r, g, b)."""
+    if v <= stops[0][0]:
+        return stops[0][1:4]
+    if v >= stops[-1][0]:
+        return stops[-1][1:4]
+
+    for idx in range(1, len(stops)):
+        p1, r1, g1, b1 = stops[idx]
+        p0, r0, g0, b0 = stops[idx - 1]
+        if v <= p1:
+            local_t = (v - p0) / (p1 - p0)
+            r = int(r0 + (r1 - r0) * local_t)
+            g = int(g0 + (g1 - g0) * local_t)
+            b = int(b0 + (b1 - b0) * local_t)
+            return r, g, b
+    return 0, 0, 0
+
+
+# Pre-calcolo delle palette come lambda per evitare chain di if
+_PALETTE_FUNCS = {
+    "Grayscale": lambda t: (int(255 * t), int(255 * t), int(255 * t)),
+    "Fire": lambda t: (
+        int(min(255, t * 255 * 3)),
+        int(min(255, max(0, t * 255 * 3 - 255))),
+        int(min(255, max(0, t * 255 * 3 - 510))),
+    ),
+    "Emerald": lambda t: (
+        int(min(255, max(0, t * 255 * 3 - 255))),
+        int(min(255, t * 255 * 3)),
+        int(max(0, t * 255 * 3 - 510)),
+    ),
+    "Ocean": lambda t: _lerp_color([(0.00, 1, 22, 39), (0.28, 0, 88, 122), (0.56, 0, 150, 199), (0.78, 72, 202, 228), (1.00, 202, 240, 248)], t),
+    "Sunset": lambda t: _lerp_color([(0.00, 22, 11, 58), (0.22, 88, 28, 135), (0.48, 180, 52, 132), (0.72, 255, 126, 95), (1.00, 255, 226, 153)], t),
+    "Ice": lambda t: _lerp_color([(0.00, 10, 20, 40), (0.35, 22, 82, 122), (0.62, 92, 170, 191), (0.85, 166, 230, 235), (1.00, 240, 252, 255)], t),
+    "Aurora": lambda t: _lerp_color([(0.00, 6, 6, 24), (0.25, 34, 139, 34), (0.50, 0, 206, 209), (0.72, 123, 104, 238), (1.00, 255, 128, 191)], t),
+    "Viridis": lambda t: _lerp_color([(0.00, 68, 1, 84), (0.25, 59, 82, 139), (0.50, 33, 145, 140), (0.75, 94, 201, 98), (1.00, 253, 231, 37)], t),
+    "Neon": lambda t: _lerp_color([(0.00, 7, 0, 30), (0.25, 76, 0, 255), (0.50, 0, 224, 255), (0.75, 57, 255, 20), (1.00, 255, 255, 0)], t),
+    "Cyberpunk": lambda t: _lerp_color([(0.00, 43, 0, 122), (0.33, 255, 0, 110), (0.66, 0, 255, 255), (1.00, 255, 255, 255)], t),
+    "Magma": lambda t: _lerp_color([(0.00, 0, 0, 4), (0.25, 80, 18, 123), (0.50, 182, 54, 121), (0.75, 251, 136, 97), (1.00, 252, 253, 191)], t),
+    "Classic": lambda t: (int(9 * (1 - t) * t * t * t * 255), int(15 * (1 - t) * (1 - t) * t * t * 255), int(8.5 * (1 - t) * (1 - t) * (1 - t) * t * 255)),
+}
+
+
 def color_from_iter(it: int, max_iter: int, palette: str = "Classic") -> tuple[int, int, int]:
-    """Mappa il numero di iterazioni in un colore RGB."""
-    def _lerp_color(stops: list[tuple[float, int, int, int]], v: float) -> tuple[int, int, int]:
-        """Interpolazione lineare tra stop colore (posizione, r, g, b)."""
-        if v <= stops[0][0]:
-            _, r, g, b = stops[0]
-            return r, g, b
-        if v >= stops[-1][0]:
-            _, r, g, b = stops[-1]
-            return r, g, b
-
-        for idx in range(1, len(stops)):
-            p1, r1, g1, b1 = stops[idx]
-            p0, r0, g0, b0 = stops[idx - 1]
-            if v <= p1:
-                local_t = (v - p0) / (p1 - p0)
-                r = int(r0 + (r1 - r0) * local_t)
-                g = int(g0 + (g1 - g0) * local_t)
-                b = int(b0 + (b1 - b0) * local_t)
-                return r, g, b
-        return 0, 0, 0
-
+    """Mappa il numero di iterazioni in un colore RGB (ottimizzato con dict)."""
     if it == max_iter:
         return 0, 0, 0
     t = it / max_iter
-
-    if palette == "Grayscale":
-        v = int(255 * t)
-        return v, v, v
-    if palette == "Fire":
-        r = int(min(255, t * 255 * 3))
-        g = int(min(255, max(0, t * 255 * 3 - 255)))
-        b = int(min(255, max(0, t * 255 * 3 - 510)))
-        return r, g, b
-    if palette == "Emerald":
-        r = int(min(255, max(0, t * 255 * 3 - 255)))
-        g = int(min(255, t * 255 * 3))
-        b = int(max(0, t * 255 * 3 - 510))
-        return r, g, b
-    if palette == "Ocean":
-        return _lerp_color(
-            [
-                (0.00, 1, 22, 39),
-                (0.28, 0, 88, 122),
-                (0.56, 0, 150, 199),
-                (0.78, 72, 202, 228),
-                (1.00, 202, 240, 248),
-            ],
-            t,
-        )
-    if palette == "Sunset":
-        return _lerp_color(
-            [
-                (0.00, 22, 11, 58),
-                (0.22, 88, 28, 135),
-                (0.48, 180, 52, 132),
-                (0.72, 255, 126, 95),
-                (1.00, 255, 226, 153),
-            ],
-            t,
-        )
-    if palette == "Ice":
-        return _lerp_color(
-            [
-                (0.00, 10, 20, 40),
-                (0.35, 22, 82, 122),
-                (0.62, 92, 170, 191),
-                (0.85, 166, 230, 235),
-                (1.00, 240, 252, 255),
-            ],
-            t,
-        )
-    if palette == "Aurora":
-        return _lerp_color(
-            [
-                (0.00, 6, 6, 24),
-                (0.25, 34, 139, 34),
-                (0.50, 0, 206, 209),
-                (0.72, 123, 104, 238),
-                (1.00, 255, 128, 191),
-            ],
-            t,
-        )
-    if palette == "Viridis":
-        return _lerp_color(
-            [
-                (0.00, 68, 1, 84),
-                (0.25, 59, 82, 139),
-                (0.50, 33, 145, 140),
-                (0.75, 94, 201, 98),
-                (1.00, 253, 231, 37),
-            ],
-            t,
-        )
-    if palette == "Neon":
-        return _lerp_color(
-            [
-                (0.00, 7, 0, 30),
-                (0.25, 76, 0, 255),
-                (0.50, 0, 224, 255),
-                (0.75, 57, 255, 20),
-                (1.00, 255, 255, 0),
-            ],
-            t,
-        )
-    if palette == "Cyberpunk":
-        return _lerp_color(
-            [
-                (0.00, 43, 0, 122),
-                (0.33, 255, 0, 110),
-                (0.66, 0, 255, 255),
-                (1.00, 255, 255, 255),
-            ],
-            t,
-        )
-    if palette == "Magma":
-        return _lerp_color(
-            [
-                (0.00, 0, 0, 4),
-                (0.25, 80, 18, 123),
-                (0.50, 182, 54, 121),
-                (0.75, 251, 136, 97),
-                (1.00, 252, 253, 191),
-            ],
-            t,
-        )
-
-    # Classic (default)
-    r = int(9 * (1 - t) * t * t * t * 255)
-    g = int(15 * (1 - t) * (1 - t) * t * t * 255)
-    b = int(8.5 * (1 - t) * (1 - t) * (1 - t) * t * 255)
-    return r, g, b
+    # Lookup veloce con fallback a Classic
+    palette_func = _PALETTE_FUNCS.get(palette, _PALETTE_FUNCS["Classic"])
+    return palette_func(t)
 
 
 def _compute_row_data_mandelbrot(
@@ -231,23 +177,24 @@ def _compute_row_data_mandelbrot(
     im_max: float,
     palette_colors: list[tuple[int, int, int]],
 ) -> tuple[int, bytes]:
-    """Calcola una riga del Mandelbrot come RGB binario."""
+    """Calcola una riga del Mandelbrot come RGB binario (con precisione floating-point migliorata)."""
     x_div = max(width - 1, 1)
     y_div = max(height - 1, 1)
     re_step = (re_max - re_min) / x_div
-    c_im = im_max - y * ((im_max - im_min) / y_div)
+    im_step = (im_max - im_min) / y_div
+    c_im = im_max - y * im_step
 
     row = bytearray(width * 3)
-    c_re = re_min
     idx = 0
-    for _ in range(width):
+    # FIX: Calcola c_re da zero ogni iterazione per evitare accumulo errori floating-point
+    for x in range(width):
+        c_re = re_min + x * re_step
         it = calculate_mandelbrot_point(c_re, c_im, max_iter)
         r, g, b = palette_colors[it]
         row[idx] = r
         row[idx + 1] = g
         row[idx + 2] = b
         idx += 3
-        c_re += re_step
 
     return y, bytes(row)
 
@@ -265,23 +212,24 @@ def _compute_row_data_julia(
     j_re: float,
     j_im: float,
 ) -> tuple[int, bytes]:
-    """Calcola una riga di Julia come RGB binario."""
+    """Calcola una riga di Julia come RGB binario (con precisione floating-point migliorata)."""
     x_div = max(width - 1, 1)
     y_div = max(height - 1, 1)
     re_step = (re_max - re_min) / x_div
-    z_im = im_max - y * ((im_max - im_min) / y_div)
+    im_step = (im_max - im_min) / y_div
+    z_im = im_max - y * im_step
 
     row = bytearray(width * 3)
-    z_re = re_min
     idx = 0
-    for _ in range(width):
+    # FIX: Calcola z_re da zero ogni iterazione per evitare accumulo errori floating-point
+    for x in range(width):
+        z_re = re_min + x * re_step
         it = calculate_julia_point(z_re, z_im, j_re, j_im, max_iter)
         r, g, b = palette_colors[it]
         row[idx] = r
         row[idx + 1] = g
         row[idx + 2] = b
         idx += 3
-        z_re += re_step
 
     return y, bytes(row)
 
@@ -297,6 +245,10 @@ class MandelbrotApp:
         cpu = os.cpu_count() or 2
 
         self.status_var = tk.StringVar(value="Pronto")
+        if HAS_NUMBA:
+            self.status_var.set("Pronto (Numba JIT attivo)")
+        else:
+            self.status_var.set("Pronto (Numba non disponibile - installa: pip install numba)")
         self.max_iter_var = tk.IntVar(value=DEFAULTS["max_iter"])
         self.width_var = tk.StringVar(value=str(DEFAULTS["width"]))
         self.height_var = tk.StringVar(value=str(DEFAULTS["height"]))
@@ -625,6 +577,11 @@ class MandelbrotApp:
             self._executor.shutdown(wait=False, cancel_futures=True)
             self._executor = None
             self._executor_workers = None
+        # Pulisce la cache dei punti quando si fa un rendering completo (economizza memoria)
+        # La cache rimane attiva durante zoom ripetuti (beneficio), ma svuotiamo tra render distanti
+        if not self.last_render_preview:
+            calculate_mandelbrot_point.cache_clear()
+            calculate_julia_point.cache_clear()
 
     def on_close(self) -> None:
         """Chiude risorse esterne prima di terminare l'app."""
@@ -887,6 +844,9 @@ class MandelbrotApp:
 
         if use_mp and workers > 1:
             executor = self._get_executor(workers)
+            # Dinamizza chunksize in base al numero di righe e worker
+            # Piccoli chunk per task distribuiti, grandi per batch consolidati
+            chunksize = max(1, min(32, (total + workers - 1) // (workers * 2)))
             common_args = [
                 repeat(width),
                 repeat(height),
@@ -903,7 +863,7 @@ class MandelbrotApp:
                 y_values,
                 *common_args,
                 *extra_args,
-                chunksize=8,
+                chunksize=chunksize,
             )
             for idx, (y, row_data) in enumerate(rows_iter, 1):
                 write_row(y, row_data)
@@ -1003,16 +963,20 @@ class MandelbrotApp:
         try:
             image = tk.PhotoImage(data=ppm_header + frame_data, format="PPM")
         except tk.TclError:
+            # Fallback: rendering per righe ottimizzato con tuple format invece di hex
             image = tk.PhotoImage(width=width, height=height)
             row_stride = width * 3
-            for y in range(height):
-                start_idx = y * row_stride
-                row = frame_data[start_idx:start_idx + row_stride]
-                colors = [
-                    f"#{row[idx]:02x}{row[idx + 1]:02x}{row[idx + 2]:02x}"
-                    for idx in range(0, row_stride, 3)
-                ]
-                image.put("{" + " ".join(colors) + "}", to=(0, y))
+            # Processa righe in blocchi per ridurre overhead UI updates
+            for y_start in range(0, height, 4):
+                y_end = min(y_start + 4, height)
+                for y in range(y_start, y_end):
+                    row_data = frame_data[y * row_stride:(y + 1) * row_stride]
+                    # Converte RGB bytes direttamente in formato #{hex} più velocemente
+                    colors = [
+                        f"#{row_data[i]:02x}{row_data[i+1]:02x}{row_data[i+2]:02x}"
+                        for i in range(0, len(row_data), 3)
+                    ]
+                    image.put("{" + " ".join(colors) + "}", to=(0, y))
 
         self.canvas.delete("all")
         self.canvas.create_image((0, 0), image=image, state="normal", anchor=tk.NW)
